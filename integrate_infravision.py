@@ -23,8 +23,8 @@ YOLO_MODEL_PATH = (
     ROOT
     / "human_detection"
     / "runs"
-    / "thermal"
-    / "colab_resumed"   # 100 epochs on Colab (old 6-epoch model: "baseline")
+    / "pop"
+    / "pop_1024"   # POP run from colab_training/train_pop_yolo_*.ipynb
     / "weights"
     / "best.pt"
 )
@@ -33,7 +33,7 @@ TEST_FOLDER = (
     ROOT
     / "human_detection"
     / "datasets"
-    / "thermal_person"
+    / "pop"   # built by human_detection/datasets/convert_pop.py
     / "images"
     / "test"
 )
@@ -227,7 +227,9 @@ print("Enhanced dimensions:", enhanced_array.shape)
 
 results = yolo.predict(
     source=str(input_path),
-    imgsz=640,
+    # POP images are 1280x1024 with small people; the POP
+    # model was trained at 1024.
+    imgsz=1024,
     conf=0.25,
     # Stricter overlap filter (default 0.7) removes duplicate
     # boxes on the same person.
