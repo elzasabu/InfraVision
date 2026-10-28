@@ -208,6 +208,23 @@ The CLI writes `<name>_fused.png` per image (`--all` adds the enhanced and SR
 frames), `detections.json` and `summary.csv`, and skips unreadable files with
 a message.
 
+## Training on Colab (and a CPU smoke test first)
+
+```bash
+python -m infravision.train.smoke        # all three trainers, 2 tiny epochs each, on CPU (~1 min)
+```
+
+It writes to `checkpoints/smoke/` (never read by the demo) and prints OK or
+the error per model. Then train for real on a free GPU with
+[`notebooks/train_colab.ipynb`](notebooks/train_colab.ipynb): it clones the
+repo, mounts Drive, unzips `POP.zip` and `paired_disaster_colab.zip`
+(made by `python paired_data/pack_for_colab.py`, about 4 GB), trains
+SR -> colorizer -> YOLO (then tunes the YOLO thresholds and evaluates),
+saves each model to Drive as soon as it is done, and zips the
+`checkpoints/` folder for the laptop. Stages already on Drive are skipped, so
+a disconnected session can just be run again. `SMOKE = True` in the first
+cell checks the whole notebook in a few minutes.
+
 ## Training and evaluating each stage
 
 **Super-resolution** (from `SR/`):
