@@ -3,6 +3,12 @@
 Usage:
     python paired_data/build_paired_dataset.py --config paired_data/sources.json
     python paired_data/build_paired_dataset.py --config paired_data/sources.json --variants 3 --preview 12
+    python paired_data/build_paired_dataset.py --config paired_data/sources.json --variants 3 --resume
+    python paired_data/build_paired_dataset.py --config paired_data/sources.json --limit 50   # quick test
+
+--resume skips pairs whose files are already written, so an interrupted build
+continues where it stopped. Every file is written to a temporary name first
+and renamed when complete, so a crash never leaves a half-written image.
 
 Output (default data/paired_disaster/):
     {train,val,test}/thermal/<id>.png        grayscale thermal
@@ -10,6 +16,7 @@ Output (default data/paired_disaster/):
     {train,val,test}/rgb_degraded/<id>__<condition>_<severity>.jpg
     {train,val,test}/labels/<id>.txt         YOLO person boxes (class 0), when the source has them
     manifest.csv                             one row per degraded variant
+    build.log                                progress log (appended on every run)
     preview.jpg                              thermal | clean RGB | degraded variants
 
 The config is a JSON list of sources; see sources.example.json.
@@ -21,6 +28,7 @@ import hashlib
 import json
 import os
 import re
+import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ProcessPoolExecutor
 
@@ -136,14 +144,71 @@ def split_for(item, val_pct):
     return split if split in ("train", "test") else "train"
 
 
+def atomic_save(img, path, **kw):
+    """Write to <path>.tmp, then rename, so a crash never leaves a partial file."""
+    tmp = path + ".tmp"
+    img.save(tmp, format=kw.pop("format", None) or ("PNG" if path.endswith(".png") else "JPEG"), **kw)
+    os.replace(tmp, path)
+
+
+def atomic_write_text(path, text):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
+def plan(item, args):
+    """Output paths and manifest rows for one pair, without writing anything.
+
+    The condition/severity picks come from a generator seeded by the pair id, so
+    they are the same on every run; that is what makes --resume possible.
+    """
+    out_root, split, pid = args["out"], item["out_split"], item["id"]
+    paths = {k: os.path.join(out_root, split, k) for k in ("thermal", "rgb", "rgb_degraded", "labels")}
+    t_path = os.path.join(paths["thermal"], pid + ".png")
+    v_path = os.path.join(paths["rgb"], pid + ".jpg")
+    lab_path = os.path.join(paths["labels"], pid + ".txt") if item.get("labels") else ""
+
+    seed = int(hashlib.md5(f"{args['seed']}:{pid}".encode()).hexdigest()[:8], 16)
+    rng = np.random.default_rng(seed)
+    # Distinct condition/severity combos per pair, so variants never overwrite each other.
+    combos = [(c, s) for c in args["conditions"] for s in args["severities"]]
+    variants = []
+    for k in rng.permutation(len(combos))[: args["variants"]]:
+        cond, sev = combos[k]
+        variants.append((cond, sev, os.path.join(paths["rgb_degraded"], f"{pid}__{cond.replace('+', '-')}_{sev}.jpg")))
+
+    rows = [dict(id=pid, source=item["source"], split=split,
+                 thermal=os.path.relpath(t_path, out_root), rgb=os.path.relpath(v_path, out_root),
+                 rgb_degraded=os.path.relpath(d_path, out_root), condition=cond, severity=sev,
+                 labels=os.path.relpath(lab_path, out_root) if lab_path else "")
+            for cond, sev, d_path in variants]
+    files = [t_path, v_path] + ([lab_path] if lab_path else []) + [d for _, _, d in variants]
+    return dict(t_path=t_path, v_path=v_path, lab_path=lab_path, variants=variants, rng=rng,
+                rows=rows, files=files)
+
+
+def is_done(files):
+    """True when every output exists and is non-empty (an empty label file is fine)."""
+    for f in files:
+        if not os.path.exists(f):
+            return False
+        if not f.endswith(".txt") and os.path.getsize(f) == 0:
+            return False
+    return True
+
+
 def process(job):
     item, args = job
-    out_root, split, pid = args["out"], item["out_split"], item["id"]
+    pl = plan(item, args)
+    if args["resume"] and is_done(pl["files"]):
+        return pl["rows"], None, True
     try:
         t = Image.open(item["thermal"]).convert("L")
         v = Image.open(item["rgb"]).convert("RGB")
     except OSError as e:
-        return [], f"skip {pid}: {e}"
+        return [], f"skip {item['id']}: {e}", False
 
     crop = item["crop"]
     if crop:
@@ -155,34 +220,17 @@ def process(job):
     if v.size != t.size:
         v = v.resize(t.size, Image.BICUBIC)
 
-    paths = {k: os.path.join(out_root, split, k) for k in ("thermal", "rgb", "rgb_degraded", "labels")}
-    t_path = os.path.join(paths["thermal"], pid + ".png")
-    v_path = os.path.join(paths["rgb"], pid + ".jpg")
-    t.save(t_path)
-    v.save(v_path, quality=95)
+    atomic_save(t, pl["t_path"])
+    atomic_save(v, pl["v_path"], quality=95)
 
-    lab_path = ""
-    if item.get("labels"):
+    if pl["lab_path"]:
         boxes = read_labels(item["labels"], crop, label_size, set(args["person_ids"]))
-        lab_path = os.path.join(paths["labels"], pid + ".txt")
-        with open(lab_path, "w") as f:
-            f.writelines(f"0 {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n" for x, y, w, h in boxes)
+        atomic_write_text(pl["lab_path"], "".join(f"0 {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n" for x, y, w, h in boxes))
 
-    seed = int(hashlib.md5(f"{args['seed']}:{pid}".encode()).hexdigest()[:8], 16)
-    rng = np.random.default_rng(seed)
     rgb = np.asarray(v)
-    rows = []
-    # Distinct condition/severity combos per pair, so variants never overwrite each other.
-    combos = [(c, s) for c in args["conditions"] for s in args["severities"]]
-    for k in rng.permutation(len(combos))[: args["variants"]]:
-        cond, sev = combos[k]
-        d_path = os.path.join(paths["rgb_degraded"], f"{pid}__{cond.replace('+', '-')}_{sev}.jpg")
-        Image.fromarray(degrade(rgb, cond, sev, rng)).save(d_path, quality=92)
-        rows.append(dict(id=pid, source=item["source"], split=split,
-                         thermal=os.path.relpath(t_path, out_root), rgb=os.path.relpath(v_path, out_root),
-                         rgb_degraded=os.path.relpath(d_path, out_root), condition=cond, severity=sev,
-                         labels=os.path.relpath(lab_path, out_root) if lab_path else ""))
-    return rows, None
+    for cond, sev, d_path in pl["variants"]:
+        atomic_save(Image.fromarray(degrade(rgb, cond, sev, pl["rng"])), d_path, quality=92)
+    return pl["rows"], None, False
 
 
 def save_preview(rows, out_root, n, cell=256):
@@ -215,6 +263,10 @@ def main():
     p.add_argument("--preview", type=int, default=8, help="rows in preview.jpg (0 = none)")
     p.add_argument("--workers", type=int, default=os.cpu_count() or 2)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--resume", action="store_true",
+                   help="skip pairs whose output files already exist (continue an interrupted build)")
+    p.add_argument("--limit", type=int, default=0, help="only build the first N pairs (0 = all)")
+    p.add_argument("--log_every", type=int, default=250, help="progress line every N pairs")
     args = p.parse_args()
 
     with open(args.config) as f:
@@ -236,35 +288,57 @@ def main():
         items += found
     if not items:
         raise SystemExit("No pairs found; check the paths in the config.")
+    if args.limit:
+        items = items[: args.limit]
+        print(f"--limit: building the first {len(items)} pairs")
 
     for split in ("train", "val", "test"):
         for k in ("thermal", "rgb", "rgb_degraded", "labels"):
             os.makedirs(os.path.join(args.out, split, k), exist_ok=True)
 
     job_args = dict(out=args.out, variants=args.variants, conditions=args.conditions,
-                    severities=args.severities, size=args.size, person_ids=args.person_ids, seed=args.seed)
-    rows = []
+                    severities=args.severities, size=args.size, person_ids=args.person_ids, seed=args.seed,
+                    resume=args.resume)
+    os.makedirs(args.out, exist_ok=True)
+    log = open(os.path.join(args.out, "build.log"), "a")
+
+    def say(msg):
+        print(msg, flush=True)
+        log.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+        log.flush()
+
+    say(f"start: {len(items)} pairs, {args.variants} variants each, resume={args.resume}")
+    rows, skipped, failed, t0 = [], 0, 0, time.time()
     with ProcessPoolExecutor(args.workers) as ex:
-        for i, (r, err) in enumerate(ex.map(process, [(it, job_args) for it in items], chunksize=16)):
+        for i, (r, err, was_done) in enumerate(ex.map(process, [(it, job_args) for it in items], chunksize=16)):
             rows += r
+            skipped += was_done
             if err:
-                print(err)
-            if (i + 1) % 500 == 0:
-                print(f"{i + 1}/{len(items)} pairs")
+                failed += 1
+                say(err)
+            if (i + 1) % args.log_every == 0 or i + 1 == len(items):
+                built = i + 1 - skipped
+                rate = built / max(time.time() - t0, 1e-6)
+                eta = (len(items) - i - 1) / rate / 60 if rate else 0
+                say(f"{i + 1}/{len(items)} pairs ({skipped} already done, {failed} failed)"
+                    + (f", {rate:.1f} pairs/s, ~{eta:.0f} min left" if built else ""))
 
     fields = ["id", "source", "split", "thermal", "rgb", "rgb_degraded", "condition", "severity", "labels"]
-    with open(os.path.join(args.out, "manifest.csv"), "w", newline="") as f:
+    manifest = os.path.join(args.out, "manifest.csv")
+    with open(manifest + ".tmp", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         w.writerows(rows)
+    os.replace(manifest + ".tmp", manifest)
 
     if args.preview:
         save_preview(rows, args.out, args.preview)
 
     pairs = {r["id"]: r["split"] for r in rows}
     counts = {s: sum(1 for v in pairs.values() if v == s) for s in ("train", "val", "test")}
-    print(f"Done: {len(pairs)} pairs, {len(rows)} degraded RGB images -> {args.out}")
-    print("Pairs per split:", counts)
+    say(f"Done: {len(pairs)} pairs, {len(rows)} degraded RGB images -> {args.out}")
+    say(f"Pairs per split: {counts}")
+    log.close()
 
 
 if __name__ == "__main__":
