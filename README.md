@@ -190,6 +190,24 @@ Outputs are written to `integrated_outputs/`:
 
 Detection uses `imgsz=640`, `conf=0.25` and `iou=0.5`.
 
+## New pipeline: demo app and batch CLI (runs on CPU)
+
+```bash
+python app.py                      # Gradio app at http://127.0.0.1:7860 (add --share for a public link)
+python -m infravision.infer --input POP/test/JPEGImages --out outputs/pop_test --limit 20
+```
+
+The app shows thermal input | fused output (colorized + enhanced, people
+boxed, people count) | real RGB (only for images that have a paired RGB, such
+as the synthetic disaster samples). It lists POP test frames and synthetic
+samples to pick from, shows per-branch timings, and offers the fused image as
+a download. "Fast" mode skips the 2x upscale. On a 4-core CPU a 1280x1024
+POP frame takes about 45 s at 2x and 15 s in fast mode.
+
+The CLI writes `<name>_fused.png` per image (`--all` adds the enhanced and SR
+frames), `detections.json` and `summary.csv`, and skips unreadable files with
+a message.
+
 ## Training and evaluating each stage
 
 **Super-resolution** (from `SR/`):
