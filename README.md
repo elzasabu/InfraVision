@@ -129,9 +129,15 @@ in place:
 python integrate_infravision.py
 ```
 
-It picks the 201st image (sorted by name) from the test folder; change
-`input_path` near the top of section 6 to use a different image. Outputs are
-written to `integrated_outputs/`:
+It uses the first image (sorted by name) in the test folder by default. Pass an
+index or an image path to pick another one:
+
+```bash
+python integrate_infravision.py 200              # 201st test image
+python integrate_infravision.py path/to/image.png
+```
+
+Outputs are written to `integrated_outputs/`:
 
 - `enhanced_thermal.png`: SwinIR output
 - `infravision_final.png`: enhanced image with person boxes and count
