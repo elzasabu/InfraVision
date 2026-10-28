@@ -1,0 +1,8 @@
+
+path: datasets/flir_align
+
+train: thermal/train
+val: thermal/test
+
+names:
+  0: person
