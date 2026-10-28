@@ -19,7 +19,8 @@ p.add_argument("--lambda_cycle", type=float, default=10.0)
 p.add_argument("--paired_weight", type=float, default=10.0,
                help="L1 weight on aligned FLIR pairs (0 = pure CycleGAN)")
 p.add_argument("--paired_source", choices=["flir", "disaster"], default="flir",
-               help="aligned pairs for the L1 term: FLIR, or data/paired_disaster (paired_data/build_paired_dataset.py)")
+               help="RGB data: FLIR, or data/paired_disaster (paired_data/build_paired_dataset.py), "
+                    "used for both the aligned L1 pairs and the unpaired RGB side")
 p.add_argument("--max_steps", type=int, default=0, help="stop early (smoke test)")
 p.add_argument("--workers", type=int, default=2)
 p.add_argument("--out", default="checkpoints/cyclegan")
@@ -57,7 +58,7 @@ if args.resume and os.path.exists(ckpt_path):
             s.step()
     print(f"Resumed from epoch {start}")
 
-unpaired = DataLoader(UnpairedDataset("train", args.size), batch_size=args.batch, shuffle=True,
+unpaired = DataLoader(UnpairedDataset("train", args.size, rgb_source=args.paired_source), batch_size=args.batch, shuffle=True,
                       num_workers=args.workers, drop_last=True)
 paired = None
 if args.paired_weight > 0:

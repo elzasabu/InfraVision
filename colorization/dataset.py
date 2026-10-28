@@ -33,11 +33,19 @@ def make_tf(size, train, channels):
 
 
 class UnpairedDataset(Dataset):
-    """A = POP thermal (1ch), B = FLIR visible RGB (3ch). Randomly paired each step."""
+    """A = POP thermal (1ch), B = visible RGB (3ch). Randomly paired each step.
 
-    def __init__(self, split="train", size=256):
+    rgb_source="flir" uses FLIR visible photos; "disaster" uses the clean RGB of
+    data/paired_disaster, so FLIR is not needed.
+    """
+
+    def __init__(self, split="train", size=256, rgb_source="flir"):
         self.a = list_images(os.path.join(POP_DIR, split, "JPEGImages"))
-        self.b = list_images(os.path.join(FLIR_DIR, "visible", "train" if split != "test" else "test"))
+        if rgb_source == "disaster":
+            self.b = list_images(os.path.join(DISASTER_DIR, "train" if split != "test" else "test", "rgb"))
+        else:
+            self.b = list_images(os.path.join(FLIR_DIR, "visible", "train" if split != "test" else "test"))
+        assert self.a and self.b, "no thermal (POP) or RGB images found"
         self.tf_a = make_tf(size, split == "train", 1)
         self.tf_b = make_tf(size, split == "train", 3)
 

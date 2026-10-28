@@ -89,7 +89,9 @@ python train_cyclegan.py --paired_source disaster
 ```
 
 This feeds the clean pairs into the existing paired L1 term
-(`--paired_weight`). The degraded RGB is not a training target. It is for the
+(`--paired_weight`) and uses the dataset's clean RGB for the unpaired RGB side
+too, so FLIR is not needed. The thermal side of the unpaired half still comes
+from `POP/train/JPEGImages`. Try `--max_steps 20` first as a quick check. The degraded RGB is not a training target. It is for the
 demo panel and for any thermal + RGB fusion or detection experiments
 (`DisasterPairedDataset(..., degraded=True)`).
 
