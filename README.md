@@ -86,13 +86,8 @@ relative to the repository root.
 |---|---|---|
 | `human_detection/runs/thermal/colab_resumed/weights/best.pt` | `integrate_infravision.py` | `colab_training/train_thermal_yolo_colab.ipynb` (FLIR thermal, training resumed on Colab) |
 | `human_detection/runs/pop/baseline/weights/best.pt` | `human_detection/detect.py` | `human_detection/train.py` (POP) |
-| `SR/checkpoints/swinir_direct/swinir_direct_epoch_20.pth` | `integrate_infravision.py` | `SR/train_swinir.py` |
+| `SR/checkpoints_pop/swinir_direct/swinir_direct_epoch_20.pth` | `integrate_infravision.py` | `SR/train_swinir.py` |
 | `colorization/checkpoints/cyclegan/colorizer_G_AB.pth` | `colorization/colorize.py` | `colorization/train_cyclegan.py` |
-
-`SR/train_swinir.py` writes its checkpoints to
-`SR/checkpoints_pop/swinir_direct/`, but the integrated script reads from
-`SR/checkpoints/swinir_direct/`. Copy or move the epoch-20 checkpoint across
-after training.
 
 `yolo11s.pt` (the pretrained starting point for `human_detection/train.py`) is
 downloaded automatically by Ultralytics.
