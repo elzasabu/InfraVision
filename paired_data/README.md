@@ -66,6 +66,34 @@ Useful options:
 - `--severities medium heavy`: limit severities (`light`, `medium`, `heavy`).
 - `--size 640 512`: resize every pair to one size.
 - `--out`: output folder (default `data/paired_disaster/`, which git ignores).
+- `--resume`: continue an interrupted build. Pairs whose files all exist (and are not
+  empty) are skipped; the rest are built. Use the same options as the first run.
+  The output is byte-identical to an uninterrupted build, because every pair's
+  random choices are seeded from its id.
+- `--limit 50`: build only the first 50 pairs (quick test).
+
+Every file is written to `<name>.tmp` and renamed when complete, so a crash or a
+laptop going to sleep never leaves a half-written image behind. Progress (pairs
+done, skipped, failed, rate and time left) is printed and appended to
+`build.log` in the output folder.
+
+## 3b. Verify
+
+```bash
+python paired_data/verify_dataset.py --expect_pairs 15488 --expect_variants 3 \
+    --grid docs/paired_dataset_samples.jpg --samples 12
+```
+
+Checks that every file in `manifest.csv` exists, is not empty, decodes, matches
+the thermal frame size, and that label lines are valid; flags leftover `.tmp`
+files and files the manifest does not know about. It prints counts per split,
+condition and severity, writes `verify_report.json`, and exits with code 1 when
+something is wrong. `--quick` skips decoding. The grid shows thermal | degraded
+RGB | clean RGB with the person boxes.
+
+Last full check of the LLVIP build (2026-10-28): 15,488 pairs (train 11,431,
+val 594, test 3,463), 46,464 degraded images, 42,432 person boxes, no problems.
+See `docs/paired_dataset_verify.json` and `docs/paired_dataset_samples.jpg`.
 
 Output:
 
