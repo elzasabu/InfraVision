@@ -18,22 +18,21 @@ import sys
 
 ROOT = Path(__file__).resolve().parent
 
-# YOLO project
-YOLO_MODEL_PATH = (
-    ROOT
-    / "human_detection"
-    / "runs"
-    / "thermal"
-    / "colab_resumed"   # 100 epochs on Colab (old 6-epoch model: "baseline")
-    / "weights"
-    / "best.pt"
-)
+# Each model is looked up in order; the first file that exists is used.
+# The POP-trained files come first. The others are older models that are
+# still on the laptop, so the demo runs (with a warning) before the POP
+# models have been trained.
+YOLO_CANDIDATES = [
+    ROOT / "human_detection" / "runs" / "pop" / "pop_1024" / "weights" / "best.pt",   # colab_training/train_pop_yolo_*.ipynb
+    ROOT / "human_detection" / "runs" / "pop" / "baseline" / "weights" / "best.pt",   # human_detection/train.py
+    ROOT / "human_detection" / "runs" / "thermal" / "colab_resumed" / "weights" / "best.pt",  # FLIR model
+]
 
 TEST_FOLDER = (
     ROOT
     / "human_detection"
     / "datasets"
-    / "thermal_person"
+    / "pop"   # built by human_detection/datasets/convert_pop.py
     / "images"
     / "test"
 )
@@ -41,12 +40,25 @@ TEST_FOLDER = (
 # SR project (SwinIR is used only for the displayed image)
 SR_FOLDER = ROOT / "SR"
 
-SWINIR_CHECKPOINT = (
-    SR_FOLDER
-    / "checkpoints_pop"   # where SR/train_swinir.py saves
-    / "swinir_direct"
-    / "swinir_direct_epoch_20.pth"
-)
+SWINIR_CANDIDATES = [
+    SR_FOLDER / "checkpoints_pop" / "swinir_direct" / "swinir_direct_epoch_20.pth",  # SR/train_swinir.py on POP
+    SR_FOLDER / "checkpoints" / "swinir_direct" / "swinir_direct_epoch_20.pth",      # older, pre-POP run
+]
+
+
+def first_existing(candidates, what):
+    for i, path in enumerate(candidates):
+        if path.exists():
+            if i > 0:
+                print(f"WARNING: {candidates[0]} not found; using the older {what} at {path}")
+            return path
+    raise FileNotFoundError(
+        f"No {what} found. Looked for:\n" + "\n".join(str(c) for c in candidates)
+    )
+
+
+YOLO_MODEL_PATH = first_existing(YOLO_CANDIDATES, "YOLO model")
+SWINIR_CHECKPOINT = first_existing(SWINIR_CANDIDATES, "SwinIR checkpoint")
 
 # Output folder
 OUTPUT_DIR = ROOT / "integrated_outputs"
@@ -73,8 +85,6 @@ print("Device:", DEVICE)
 # ============================================================
 
 for path in [
-    YOLO_MODEL_PATH,
-    SWINIR_CHECKPOINT,
     TEST_FOLDER,
 ]:
     if not path.exists():
@@ -253,7 +263,9 @@ print("Enhanced dimensions:", enhanced_array.shape)
 
 results = yolo.predict(
     source=str(input_path),
-    imgsz=640,
+    # POP images are 1280x1024 with small people; the POP
+    # model was trained at 1024.
+    imgsz=1024,
     conf=0.25,
     # Stricter overlap filter (default 0.7) removes duplicate
     # boxes on the same person.
