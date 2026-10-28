@@ -1,0 +1,58 @@
+# InfraVision pipeline settings. Every key is optional: missing keys use the
+# defaults in infravision/config.py. Paths are relative to the repository root.
+# Pass another file with --config, or override single keys in code:
+#   load_config(overrides={"sr": {"scale": 1}})
+
+device: auto            # auto | cpu | cuda | cuda:0
+
+# Branch A step 1: classic enhancement before super-resolution.
+pre_enhance:
+  enabled: true
+  clahe: true
+  clahe_clip: 2.0       # contrast limit; higher = stronger local contrast
+  clahe_tiles: 8        # grid size (tiles per side)
+  denoise: true
+  denoise_strength: 5   # cv2.fastNlMeansDenoising h; 0 disables
+
+# Branch A step 2: super-resolution (EDSR on a bicubic-upscaled frame).
+sr:
+  enabled: true
+  scale: 2              # output size = input size * scale (1 = restore only)
+  max_input_side: 1280  # longer inputs are processed in tiles of this size
+  # First existing file wins. checkpoints/ is written by infravision.train.sr.
+  weights:
+    - checkpoints/sr/edsr_best.pth
+    - SR/checkpoints_pop/ssim_residual/edsr_ssim_residual_epoch_10.pth
+    - SR/checkpoints/ssim_residual/edsr_ssim_residual_epoch_10.pth
+
+# Branch A step 3: thermal (1 channel) -> RGB (3 channels).
+colorizer:
+  enabled: true
+  work_side: 640        # colorize at this longer side, then upsample (CPU friendly)
+  detail: 0.5           # add back SR thermal detail to the upsampled colour (0 = off)
+  weights:
+    - checkpoints/colorizer/colorizer_best.pth
+    - colorization/checkpoints/cyclegan/colorizer_G_AB.pth
+  fallback_colormap: inferno   # used, and reported, when no colorizer weights exist
+
+# Branch B: person detection.
+detection:
+  run_on: original      # original | enhanced (pre-enhanced, same size as input)
+  imgsz: 1024           # POP is 1280x1024 with people 20-40 px tall
+  conf: 0.25            # overridden by checkpoints/yolo/thresholds.json when present
+  iou: 0.5
+  tile: 0               # 0 = whole frame; N = N x N overlapping tiles (small people)
+  tile_overlap: 0.2
+  weights:
+    - checkpoints/yolo/best.pt
+    - human_detection/runs/pop/pop_1024/weights/best.pt
+    - human_detection/runs/pop/baseline/weights/best.pt
+    - human_detection/runs/thermal/colab_resumed/weights/best.pt
+
+# Fusion: how detections are drawn on the colorized image.
+fusion:
+  box_color: [0, 255, 0]      # RGB
+  outline_color: [0, 0, 0]    # dark outline around every box for contrast
+  thickness: 0                # 0 = scale with image size
+  show_conf: true
+  label_people_count: true

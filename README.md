@@ -122,6 +122,31 @@ python -m infravision.data.pop --resplit --seed 0   # redraw train/val by flight
 
 In code: `from infravision.data.pop import pop_splits, POPDetection, POPSRCrops`.
 
+## Checkpoint folder (new pipeline)
+
+The `infravision` package reads and the training scripts write one folder:
+
+```
+checkpoints/
+  sr/edsr_best.pth             python -m infravision.train.sr          (+ metrics.json)
+  colorizer/colorizer_best.pth python -m infravision.train.colorizer   (+ metrics.json)
+  yolo/best.pt                 python -m infravision.train.yolo train  (+ thresholds.json)
+  smoke/...                    --smoke runs; never read by the demo
+```
+
+Each training script keeps the checkpoint with the best validation score
+(PSNR for SR and the colorizer) and writes `metrics.json` next to it.
+`configs/infravision.yaml` lists, per model, `checkpoints/...` first and then
+the older locations (`SR/checkpoints_pop/`, `SR/checkpoints/`,
+`human_detection/runs/...`, `colorization/checkpoints/`), so existing weights
+keep working. The folder is git-ignored; weights are shared as a release or
+a zip, not committed.
+
+Branch A (enhancement) is configured in `configs/infravision.yaml`:
+`pre_enhance` (CLAHE + mild denoise, toggleable), `sr.scale`, and the
+colorizer. All training scripts take `--device auto|cpu|cuda` (auto falls back
+to CPU) and `--amp` for mixed precision on CUDA.
+
 ## Preparing data
 
 ```bash
