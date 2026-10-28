@@ -150,12 +150,38 @@ test_images = sorted(
 
 if not test_images:
     raise RuntimeError(
-        f"No images found in:\n{TEST_FOLDER}"
+        f"No test images ({', '.join(sorted(image_extensions))}) "
+        f"found in:\n{TEST_FOLDER}"
     )
 
-# Select the first image for the initial demonstration.
-# Later, replace this with a specific image path if needed.
-input_path = test_images[200]
+# Use the first image by default. Pass an index into the sorted test
+# folder or an image path to pick another one, e.g.:
+#   python integrate_infravision.py 200
+#   python integrate_infravision.py path/to/image.png
+image_choice = sys.argv[1] if len(sys.argv) > 1 else "0"
+
+if image_choice.lstrip("-").isdigit():
+    image_index = int(image_choice)
+
+    if not -len(test_images) <= image_index < len(test_images):
+        raise IndexError(
+            f"Image index {image_index} is out of range: "
+            f"{TEST_FOLDER} has {len(test_images)} images "
+            f"(valid: 0 to {len(test_images) - 1})."
+        )
+
+    input_path = test_images[image_index]
+else:
+    input_path = Path(image_choice)
+
+    # Allow a bare file name from the test folder.
+    if not input_path.exists() and (TEST_FOLDER / input_path).exists():
+        input_path = TEST_FOLDER / input_path
+
+    if not input_path.is_file():
+        raise FileNotFoundError(
+            f"Image not found:\n{image_choice}"
+        )
 
 print("\nInput image:", input_path.name)
 
