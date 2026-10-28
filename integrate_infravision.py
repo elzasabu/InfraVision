@@ -43,7 +43,7 @@ SR_FOLDER = ROOT / "SR"
 
 SWINIR_CHECKPOINT = (
     SR_FOLDER
-    / "checkpoints"
+    / "checkpoints_pop"   # where SR/train_swinir.py saves
     / "swinir_direct"
     / "swinir_direct_epoch_20.pth"
 )
