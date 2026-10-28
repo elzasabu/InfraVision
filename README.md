@@ -112,6 +112,7 @@ Derived datasets are generated from these with the scripts below.
 ```bash
 # FLIR: COCO -> YOLO labels, then a train/val/test split for the demo
 python human_detection/datasets/convert_flir.py      # -> flir_align/labels/train/
+python human_detection/datasets/convert_flir_test.py # -> flir_align/labels/test/
 python human_detection/organize_dataset.py          # -> datasets/thermal_person/
 
 # POP: COCO -> YOLO dataset for detection
