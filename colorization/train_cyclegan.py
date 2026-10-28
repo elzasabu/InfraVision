@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
 
-from dataset import FlirPairedDataset, UnpairedDataset
+from dataset import DisasterPairedDataset, FlirPairedDataset, UnpairedDataset
 from models.cyclegan import PatchDiscriminator, ResnetGenerator
 
 p = argparse.ArgumentParser()
@@ -18,6 +18,8 @@ p.add_argument("--lr", type=float, default=2e-4)
 p.add_argument("--lambda_cycle", type=float, default=10.0)
 p.add_argument("--paired_weight", type=float, default=10.0,
                help="L1 weight on aligned FLIR pairs (0 = pure CycleGAN)")
+p.add_argument("--paired_source", choices=["flir", "disaster"], default="flir",
+               help="aligned pairs for the L1 term: FLIR, or data/paired_disaster (paired_data/build_paired_dataset.py)")
 p.add_argument("--max_steps", type=int, default=0, help="stop early (smoke test)")
 p.add_argument("--workers", type=int, default=2)
 p.add_argument("--out", default="checkpoints/cyclegan")
@@ -59,7 +61,8 @@ unpaired = DataLoader(UnpairedDataset("train", args.size), batch_size=args.batch
                       num_workers=args.workers, drop_last=True)
 paired = None
 if args.paired_weight > 0:
-    paired = DataLoader(FlirPairedDataset("train", args.size), batch_size=args.batch, shuffle=True,
+    pair_ds = FlirPairedDataset if args.paired_source == "flir" else DisasterPairedDataset
+    paired = DataLoader(pair_ds("train", args.size), batch_size=args.batch, shuffle=True,
                         num_workers=args.workers, drop_last=True)
     paired_iter = iter(paired)
 
