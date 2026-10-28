@@ -102,6 +102,26 @@ downloaded automatically by Ultralytics.
 
 Derived datasets are generated from these with the scripts below.
 
+## POP data and splits
+
+POP is the primary dataset: drone thermal frames (1280x1024, stored as three
+identical channels) with COCO person boxes. It has **no RGB**, so:
+
+- super-resolution and person detection train and are scored on POP;
+- the colorizer trains on aligned thermal/RGB pairs from LLVIP (and optionally
+  FLIR) and is only judged by eye on POP.
+
+Frames from one flight are near-duplicates, so splits are by flight, never by
+random frame. POP's own splits already do this and are kept as they are:
+train F1-F12 (5,548 frames), val F13-F16 (2,320), test T1-T3 (900).
+
+```bash
+python -m infravision.data.pop          # counts, box sizes, and a check that no flight is in two splits
+python -m infravision.data.pop --resplit --seed 0   # redraw train/val by flight (test is never touched)
+```
+
+In code: `from infravision.data.pop import pop_splits, POPDetection, POPSRCrops`.
+
 ## Preparing data
 
 ```bash
