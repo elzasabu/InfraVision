@@ -1,0 +1,975 @@
+{
+  "seed": 0,
+  "device": "CPU (x86_64, 4 threads)",
+  "torch": "2.15.0+cu132",
+  "lpips_note": null,
+  "pipeline": {
+    "sr": "EDSR (SR/checkpoints/ssim_residual/edsr_ssim_residual_epoch_10.pth) x2",
+    "colorizer": "colorizer (checkpoints/colorizer/colorizer_best.pth)",
+    "detector": "YOLO (human_detection/runs/thermal/colab_resumed/weights/best.pt) imgsz=1024 conf=0.25 iou=0.5",
+    "pre_enhance": {
+      "enabled": true,
+      "clahe": true,
+      "clahe_clip": 2.0,
+      "clahe_tiles": 8,
+      "denoise": true,
+      "denoise_strength": 5
+    },
+    "notes": [
+      "detector is the FLIR street-scene model, not trained on POP drone views yet"
+    ]
+  },
+  "subsets": {
+    "pop_test_available": 300,
+    "pop_test_used": 100,
+    "runtime_images": 13,
+    "runtime_warmup": 3,
+    "pop_files": [
+      "T1_0000_30.291.JPG",
+      "T1_0021_29.946.JPG",
+      "T1_0024_30.017.JPG",
+      "T1_0027_29.876.JPG",
+      "T1_0051_50.298.JPG",
+      "T1_0060_70.132.JPG",
+      "T1_0066_70.36.JPG",
+      "T1_0069_30.283.JPG",
+      "T1_0081_30.014.JPG",
+      "T1_0093_29.92.JPG",
+      "T1_0096_30.246.JPG",
+      "T1_0099_30.363.JPG",
+      "T1_0108_30.459.JPG",
+      "T1_0111_30.398.JPG",
+      "T1_0114_50.433.JPG",
+      "T1_0141_49.532.JPG",
+      "T1_0144_50.356.JPG",
+      "T1_0150_49.952.JPG",
+      "T1_0153_69.669.JPG",
+      "T1_0156_69.866.JPG",
+      "T1_0183_69.972.JPG",
+      "T1_0198_30.452.JPG",
+      "T1_0213_50.195.JPG",
+      "T1_0219_50.189.JPG",
+      "T1_0222_49.503.JPG",
+      "T1_0225_50.004.JPG",
+      "T1_0231_49.837.JPG",
+      "T1_0243_49.511.JPG",
+      "T1_0255_70.381.JPG",
+      "T1_0291_50.012.JPG",
+      "T1_0294_50.015.JPG",
+      "T2_0007_53.263.JPG",
+      "T2_0028_52.666.JPG",
+      "T2_0034_45.79.JPG",
+      "T2_0037_50.964.JPG",
+      "T2_0058_49.655.JPG",
+      "T2_0067_54.893.JPG",
+      "T2_0070_50.31.JPG",
+      "T2_0079_53.616.JPG",
+      "T2_0085_51.114.JPG",
+      "T2_0091_53.135.JPG",
+      "T2_0094_50.961.JPG",
+      "T2_0109_54.49.JPG",
+      "T2_0112_47.494.JPG",
+      "T2_0115_46.587.JPG",
+      "T2_0118_52.383.JPG",
+      "T2_0127_48.065.JPG",
+      "T2_0136_45.254.JPG",
+      "T2_0145_49.636.JPG",
+      "T2_0151_46.561.JPG",
+      "T2_0157_46.415.JPG",
+      "T2_0160_51.982.JPG",
+      "T2_0163_50.07.JPG",
+      "T2_0169_47.9.JPG",
+      "T2_0178_53.535.JPG",
+      "T2_0193_49.972.JPG",
+      "T2_0199_50.313.JPG",
+      "T2_0205_46.373.JPG",
+      "T2_0208_53.648.JPG",
+      "T2_0217_51.235.JPG",
+      "T2_0240_47.003.JPG",
+      "T2_0243_45.485.JPG",
+      "T2_0249_46.215.JPG",
+      "T3_0015_53.011.JPG",
+      "T3_0027_46.65.JPG",
+      "T3_0048_45.184.JPG",
+      "T3_0051_48.743.JPG",
+      "T3_0057_48.862.JPG",
+      "T3_0060_50.246.JPG",
+      "T3_0066_47.651.JPG",
+      "T3_0081_49.688.JPG",
+      "T3_0102_48.958.JPG",
+      "T3_0108_47.355.JPG",
+      "T3_0114_52.975.JPG",
+      "T3_0123_45.734.JPG",
+      "T3_0138_47.207.JPG",
+      "T3_0147_52.503.JPG",
+      "T3_0150_54.934.JPG",
+      "T3_0159_49.871.JPG",
+      "T3_0168_47.655.JPG",
+      "T3_0171_48.026.JPG",
+      "T3_0177_51.415.JPG",
+      "T3_0180_54.631.JPG",
+      "T3_0192_51.692.JPG",
+      "T3_0195_50.928.JPG",
+      "T3_0198_54.569.JPG",
+      "T3_0201_51.884.JPG",
+      "T3_0210_48.149.JPG",
+      "T3_0220_53.975.JPG",
+      "T3_0226_53.23.JPG",
+      "T3_0229_50.211.JPG",
+      "T3_0235_50.011.JPG",
+      "T3_0241_52.968.JPG",
+      "T3_0253_45.339.JPG",
+      "T3_0289_53.577.JPG",
+      "T3_0298_49.11.JPG",
+      "T3_0310_50.144.JPG",
+      "T3_0322_50.565.JPG",
+      "T3_0329_52.437.JPG",
+      "T3_0332_48.918.JPG"
+    ],
+    "sr_images": 30,
+    "color_pairs_used": 50
+  },
+  "datasets": {
+    "POP": {
+      "splits": {
+        "train": {
+          "images": 5548,
+          "persons": 18425
+        },
+        "val": {
+          "images": 2320,
+          "persons": 6546
+        },
+        "test": {
+          "images": 900,
+          "persons": 1840
+        },
+        "total": {
+          "images": 8768,
+          "persons": 26811
+        }
+      },
+      "role": "Target domain: drone thermal SAR; SR and detection evaluation",
+      "source": "POP/{split}/Annotations/{split}.json"
+    },
+    "FLIR": {
+      "splits": {
+        "train": {
+          "images": 4129,
+          "persons": 8987
+        },
+        "test": {
+          "images": 1013,
+          "persons": 4107
+        },
+        "total": {
+          "images": 5142,
+          "persons": 13094
+        }
+      },
+      "role": "Detector pre-training (thermal street scenes)",
+      "source": "flir_align/coco_annotations/{train,test}.json (no val split in this copy)"
+    },
+    "LLVIP": {
+      "splits": {
+        "train": {
+          "pairs": 11431
+        },
+        "val": {
+          "pairs": 594
+        },
+        "test": {
+          "pairs": 3463
+        },
+        "total": {
+          "pairs": 15488
+        }
+      },
+      "role": "Aligned thermal/RGB pairs: colorizer training and test",
+      "source": "data/paired_disaster/manifest.csv (pairs used; raw LLVIP folder not on this machine)"
+    },
+    "synthetic": {
+      "degraded_images": 46464,
+      "per_condition": {
+        "smoke+dark": 7614,
+        "dust": 7736,
+        "dust+dark": 7813,
+        "smoke": 7717,
+        "fog": 7793,
+        "dark": 7791
+      },
+      "per_condition_split": {
+        "smoke+dark": {
+          "train": 5613,
+          "val": 287,
+          "test": 1714
+        },
+        "dust": {
+          "train": 5699,
+          "val": 304,
+          "test": 1733
+        },
+        "dust+dark": {
+          "train": 5733,
+          "val": 318,
+          "test": 1762
+        },
+        "smoke": {
+          "train": 5678,
+          "val": 303,
+          "test": 1736
+        },
+        "fog": {
+          "train": 5806,
+          "val": 289,
+          "test": 1698
+        },
+        "dark": {
+          "train": 5764,
+          "val": 281,
+          "test": 1746
+        }
+      },
+      "per_severity": {
+        "light": 15266,
+        "heavy": 15546,
+        "medium": 15652
+      },
+      "source": "/mnt/user-data/uploads/Infravision/data/paired_disaster/manifest.csv"
+    }
+  },
+  "training": {
+    "EDSR": {
+      "checkpoint": "SR/checkpoints/ssim_residual/edsr_ssim_residual_epoch_10.pth",
+      "input_size": "not recorded",
+      "epochs": 10,
+      "batch": 1,
+      "optimizer": "Adam",
+      "lr": 0.0001,
+      "loss": "0.9 L1 + 0.1 (1 - SSIM)",
+      "device": "not recorded (script uses CUDA if available, else CPU)",
+      "data": "not POP (older SR/checkpoints run; training data not recorded)",
+      "status": "preliminary",
+      "source": "SR/train_ssim.py constants"
+    },
+    "Colorizer": {
+      "checkpoint": "checkpoints/colorizer/colorizer_best.pth",
+      "input_size": "256 px crops (frames resized to 640 px)",
+      "epochs": 3,
+      "batch": 4,
+      "optimizer": "Adam (betas 0.5, 0.999), cosine LR",
+      "lr": 0.0002,
+      "loss": "L1 + 0.5 (1 - SSIM)",
+      "device": "cpu",
+      "data": "75 train / 25 val LLVIP pairs",
+      "minutes": 12.96,
+      "best": {
+        "epoch": 3,
+        "train_loss": 0.5105403959751129,
+        "val_psnr": 19.23000717163086,
+        "val_ssim": 0.5790658593177795
+      },
+      "status": "preliminary (3 epochs, 75 images)",
+      "source": "checkpoints/colorizer/metrics.json"
+    },
+    "YOLO": {
+      "checkpoint": "human_detection/runs/thermal/colab_resumed/weights/best.pt",
+      "model": "/content/weights/last_stripped.pt",
+      "input_size": 640,
+      "epochs": 100,
+      "epochs_run": 100,
+      "batch": 16,
+      "optimizer": "auto",
+      "lr": 0.01,
+      "loss": "Ultralytics default (box CIoU + cls BCE + DFL)",
+      "device": "GPU (device='0', Colab)",
+      "data": "FLIR ADAS thermal (person), not POP",
+      "flir_val_last": {
+        "precision": 0.85537,
+        "recall": 0.77139,
+        "map50": 0.85361
+      },
+      "status": "fully trained on FLIR; not fine-tuned on POP",
+      "source": "/mnt/user-data/uploads/Infravision/human_detection/runs/thermal/colab_resumed/args.yaml"
+    }
+  },
+  "sr": {
+    "n": 30,
+    "scale": 2,
+    "downscale": "cv2.INTER_AREA",
+    "reference": "original POP thermal",
+    "metric_space": "8-bit grey",
+    "means": {
+      "bicubic": {
+        "psnr": 47.889595158894856,
+        "ssim": 0.9925331314404805,
+        "lpips": 0.04346188787991802
+      },
+      "edsr": {
+        "psnr": 34.24186261494955,
+        "ssim": 0.9489936848481496,
+        "lpips": 0.17772162531812985
+      }
+    },
+    "per_image": [
+      {
+        "file": "T1_0000_30.291.JPG",
+        "bicubic": {
+          "psnr": 47.84960174560547,
+          "ssim": 0.9915065765380859,
+          "lpips": 0.05685870349407196
+        },
+        "edsr": {
+          "psnr": 34.50346374511719,
+          "ssim": 0.9384353160858154,
+          "lpips": 0.23609544336795807
+        }
+      },
+      {
+        "file": "T1_0021_29.946.JPG",
+        "bicubic": {
+          "psnr": 49.04633331298828,
+          "ssim": 0.9932884573936462,
+          "lpips": 0.037412986159324646
+        },
+        "edsr": {
+          "psnr": 36.48265838623047,
+          "ssim": 0.9612912535667419,
+          "lpips": 0.16535769402980804
+        }
+      },
+      {
+        "file": "T1_0024_30.017.JPG",
+        "bicubic": {
+          "psnr": 49.00514602661133,
+          "ssim": 0.9931756854057312,
+          "lpips": 0.03829752281308174
+        },
+        "edsr": {
+          "psnr": 36.38853454589844,
+          "ssim": 0.9605643153190613,
+          "lpips": 0.16693860292434692
+        }
+      },
+      {
+        "file": "T1_0027_29.876.JPG",
+        "bicubic": {
+          "psnr": 48.992103576660156,
+          "ssim": 0.9931954741477966,
+          "lpips": 0.03722283989191055
+        },
+        "edsr": {
+          "psnr": 36.300148010253906,
+          "ssim": 0.9599751234054565,
+          "lpips": 0.16855061054229736
+        }
+      },
+      {
+        "file": "T1_0051_50.298.JPG",
+        "bicubic": {
+          "psnr": 48.29623794555664,
+          "ssim": 0.9927706718444824,
+          "lpips": 0.04101118445396423
+        },
+        "edsr": {
+          "psnr": 35.005462646484375,
+          "ssim": 0.952418863773346,
+          "lpips": 0.17878499627113342
+        }
+      },
+      {
+        "file": "T1_0060_70.132.JPG",
+        "bicubic": {
+          "psnr": 47.62995147705078,
+          "ssim": 0.9926298260688782,
+          "lpips": 0.04244895651936531
+        },
+        "edsr": {
+          "psnr": 33.55372619628906,
+          "ssim": 0.9468759894371033,
+          "lpips": 0.18589942157268524
+        }
+      },
+      {
+        "file": "T1_0066_70.36.JPG",
+        "bicubic": {
+          "psnr": 47.543853759765625,
+          "ssim": 0.9926115274429321,
+          "lpips": 0.04298226907849312
+        },
+        "edsr": {
+          "psnr": 33.50639343261719,
+          "ssim": 0.9466844201087952,
+          "lpips": 0.18800649046897888
+        }
+      },
+      {
+        "file": "T1_0069_30.283.JPG",
+        "bicubic": {
+          "psnr": 48.12812042236328,
+          "ssim": 0.9927559494972229,
+          "lpips": 0.03907676041126251
+        },
+        "edsr": {
+          "psnr": 34.285255432128906,
+          "ssim": 0.950827419757843,
+          "lpips": 0.17781628668308258
+        }
+      },
+      {
+        "file": "T1_0081_30.014.JPG",
+        "bicubic": {
+          "psnr": 48.50940704345703,
+          "ssim": 0.9932184815406799,
+          "lpips": 0.035411834716796875
+        },
+        "edsr": {
+          "psnr": 34.9659423828125,
+          "ssim": 0.9583232402801514,
+          "lpips": 0.1510503590106964
+        }
+      },
+      {
+        "file": "T1_0093_29.92.JPG",
+        "bicubic": {
+          "psnr": 48.267539978027344,
+          "ssim": 0.9927474856376648,
+          "lpips": 0.04179616644978523
+        },
+        "edsr": {
+          "psnr": 34.97041320800781,
+          "ssim": 0.955340564250946,
+          "lpips": 0.16326305270195007
+        }
+      },
+      {
+        "file": "T1_0096_30.246.JPG",
+        "bicubic": {
+          "psnr": 48.239166259765625,
+          "ssim": 0.9926600456237793,
+          "lpips": 0.04214703291654587
+        },
+        "edsr": {
+          "psnr": 35.06329345703125,
+          "ssim": 0.9542518854141235,
+          "lpips": 0.16684971749782562
+        }
+      },
+      {
+        "file": "T1_0099_30.363.JPG",
+        "bicubic": {
+          "psnr": 48.13840866088867,
+          "ssim": 0.9925833344459534,
+          "lpips": 0.04167021065950394
+        },
+        "edsr": {
+          "psnr": 34.92008972167969,
+          "ssim": 0.9525453448295593,
+          "lpips": 0.17102569341659546
+        }
+      },
+      {
+        "file": "T1_0108_30.459.JPG",
+        "bicubic": {
+          "psnr": 47.41288757324219,
+          "ssim": 0.9916200637817383,
+          "lpips": 0.049512092024087906
+        },
+        "edsr": {
+          "psnr": 33.98352813720703,
+          "ssim": 0.9410375952720642,
+          "lpips": 0.19700071215629578
+        }
+      },
+      {
+        "file": "T1_0111_30.398.JPG",
+        "bicubic": {
+          "psnr": 47.29560089111328,
+          "ssim": 0.9913747906684875,
+          "lpips": 0.05177316814661026
+        },
+        "edsr": {
+          "psnr": 33.88040542602539,
+          "ssim": 0.9386808276176453,
+          "lpips": 0.20333796739578247
+        }
+      },
+      {
+        "file": "T1_0114_50.433.JPG",
+        "bicubic": {
+          "psnr": 47.951324462890625,
+          "ssim": 0.9931432604789734,
+          "lpips": 0.03808961808681488
+        },
+        "edsr": {
+          "psnr": 33.98088836669922,
+          "ssim": 0.9559130668640137,
+          "lpips": 0.16182149946689606
+        }
+      },
+      {
+        "file": "T1_0141_49.532.JPG",
+        "bicubic": {
+          "psnr": 48.21989059448242,
+          "ssim": 0.9930053949356079,
+          "lpips": 0.040518615394830704
+        },
+        "edsr": {
+          "psnr": 34.319889068603516,
+          "ssim": 0.9552015662193298,
+          "lpips": 0.1673719584941864
+        }
+      },
+      {
+        "file": "T1_0144_50.356.JPG",
+        "bicubic": {
+          "psnr": 48.03253936767578,
+          "ssim": 0.9928497076034546,
+          "lpips": 0.04206062853336334
+        },
+        "edsr": {
+          "psnr": 34.20541763305664,
+          "ssim": 0.953059732913971,
+          "lpips": 0.17185479402542114
+        }
+      },
+      {
+        "file": "T1_0150_49.952.JPG",
+        "bicubic": {
+          "psnr": 47.6545524597168,
+          "ssim": 0.9924924969673157,
+          "lpips": 0.04628600925207138
+        },
+        "edsr": {
+          "psnr": 33.83154296875,
+          "ssim": 0.9483051300048828,
+          "lpips": 0.18050888180732727
+        }
+      },
+      {
+        "file": "T1_0153_69.669.JPG",
+        "bicubic": {
+          "psnr": 48.264739990234375,
+          "ssim": 0.9930904507637024,
+          "lpips": 0.038865093141794205
+        },
+        "edsr": {
+          "psnr": 34.62169647216797,
+          "ssim": 0.9561658501625061,
+          "lpips": 0.1675969809293747
+        }
+      },
+      {
+        "file": "T1_0156_69.866.JPG",
+        "bicubic": {
+          "psnr": 48.27791213989258,
+          "ssim": 0.9930577278137207,
+          "lpips": 0.039282966405153275
+        },
+        "edsr": {
+          "psnr": 34.61522674560547,
+          "ssim": 0.9560073614120483,
+          "lpips": 0.16840609908103943
+        }
+      },
+      {
+        "file": "T1_0183_69.972.JPG",
+        "bicubic": {
+          "psnr": 47.86228561401367,
+          "ssim": 0.9925025105476379,
+          "lpips": 0.04683881625533104
+        },
+        "edsr": {
+          "psnr": 34.02322006225586,
+          "ssim": 0.9477006196975708,
+          "lpips": 0.18935734033584595
+        }
+      },
+      {
+        "file": "T1_0198_30.452.JPG",
+        "bicubic": {
+          "psnr": 46.68720626831055,
+          "ssim": 0.9915139675140381,
+          "lpips": 0.05431005358695984
+        },
+        "edsr": {
+          "psnr": 32.77759552001953,
+          "ssim": 0.938374936580658,
+          "lpips": 0.20228561758995056
+        }
+      },
+      {
+        "file": "T1_0213_50.195.JPG",
+        "bicubic": {
+          "psnr": 46.989864349365234,
+          "ssim": 0.9918790459632874,
+          "lpips": 0.04717348515987396
+        },
+        "edsr": {
+          "psnr": 32.809207916259766,
+          "ssim": 0.9387991428375244,
+          "lpips": 0.18057838082313538
+        }
+      },
+      {
+        "file": "T1_0219_50.189.JPG",
+        "bicubic": {
+          "psnr": 46.98735046386719,
+          "ssim": 0.9918913841247559,
+          "lpips": 0.04847460240125656
+        },
+        "edsr": {
+          "psnr": 32.832637786865234,
+          "ssim": 0.9389406442642212,
+          "lpips": 0.18395200371742249
+        }
+      },
+      {
+        "file": "T1_0222_49.503.JPG",
+        "bicubic": {
+          "psnr": 47.037696838378906,
+          "ssim": 0.9918810129165649,
+          "lpips": 0.049018122255802155
+        },
+        "edsr": {
+          "psnr": 32.874393463134766,
+          "ssim": 0.9388893842697144,
+          "lpips": 0.18560241162776947
+        }
+      },
+      {
+        "file": "T1_0225_50.004.JPG",
+        "bicubic": {
+          "psnr": 47.012943267822266,
+          "ssim": 0.9918331503868103,
+          "lpips": 0.04917462170124054
+        },
+        "edsr": {
+          "psnr": 32.87992477416992,
+          "ssim": 0.9388068318367004,
+          "lpips": 0.18519026041030884
+        }
+      },
+      {
+        "file": "T1_0231_49.837.JPG",
+        "bicubic": {
+          "psnr": 47.01525115966797,
+          "ssim": 0.9918149709701538,
+          "lpips": 0.05258042365312576
+        },
+        "edsr": {
+          "psnr": 32.90636444091797,
+          "ssim": 0.9386572241783142,
+          "lpips": 0.19096705317497253
+        }
+      },
+      {
+        "file": "T1_0243_49.511.JPG",
+        "bicubic": {
+          "psnr": 46.92758560180664,
+          "ssim": 0.9917616248130798,
+          "lpips": 0.05358366668224335
+        },
+        "edsr": {
+          "psnr": 32.8203125,
+          "ssim": 0.9371002912521362,
+          "lpips": 0.1939682811498642
+        }
+      },
+      {
+        "file": "T1_0255_70.381.JPG",
+        "bicubic": {
+          "psnr": 47.35057067871094,
+          "ssim": 0.9921937584877014,
+          "lpips": 0.04660444334149361
+        },
+        "edsr": {
+          "psnr": 33.39377975463867,
+          "ssim": 0.9419148564338684,
+          "lpips": 0.1841457039117813
+        }
+      },
+      {
+        "file": "T1_0291_50.012.JPG",
+        "bicubic": {
+          "psnr": 50.06178283691406,
+          "ssim": 0.9949451088905334,
+          "lpips": 0.013373742811381817
+        },
+        "edsr": {
+          "psnr": 36.554466247558594,
+          "ssim": 0.9687217473983765,
+          "lpips": 0.09806444495916367
+        }
+      }
+    ]
+  },
+  "colorization": {
+    "n_pairs": 50,
+    "n_degraded": 150,
+    "resolution": "640 px longer side",
+    "reference": "clean RGB of the pair",
+    "groups": {
+      "Clear": {
+        "n_pairs": 50,
+        "n_images": 50,
+        "colorizer": {
+          "psnr": 17.441503477096557,
+          "ssim": 0.5092992404103279,
+          "lpips": 0.8190227174758911
+        },
+        "false_colour": {
+          "psnr": 8.831725816726685,
+          "ssim": 0.22829930514097213,
+          "lpips": 0.7974056422710418
+        },
+        "degraded_visible": null
+      },
+      "Smoke/Fog": {
+        "n_pairs": 34,
+        "n_images": 47,
+        "colorizer": {
+          "psnr": 18.242964612676744,
+          "ssim": 0.5147783800642541,
+          "lpips": 0.8076681570803865
+        },
+        "degraded_visible": {
+          "psnr": 9.73274289293492,
+          "ssim": 0.3618759562043434,
+          "lpips": 0.5770393732063314
+        }
+      },
+      "Dust": {
+        "n_pairs": 20,
+        "n_images": 24,
+        "colorizer": {
+          "psnr": 16.308339834213257,
+          "ssim": 0.4985400295505921,
+          "lpips": 0.8406586969892184
+        },
+        "degraded_visible": {
+          "psnr": 8.172570665677389,
+          "ssim": 0.2810133444145322,
+          "lpips": 0.640163715928793
+        }
+      },
+      "Darkness": {
+        "n_pairs": 21,
+        "n_images": 25,
+        "colorizer": {
+          "psnr": 17.70927005767822,
+          "ssim": 0.4975994348526001,
+          "lpips": 0.8329257893562317
+        },
+        "degraded_visible": {
+          "psnr": 19.086005249023437,
+          "ssim": 0.5007594966888428,
+          "lpips": 0.7057432025671005
+        }
+      }
+    },
+    "per_condition": {
+      "dark": {
+        "n_images": 25,
+        "colorizer": {
+          "psnr": 17.70927005767822,
+          "ssim": 0.4975994348526001,
+          "lpips": 0.8329257893562317
+        },
+        "degraded_visible": {
+          "psnr": 19.086005249023437,
+          "ssim": 0.5007594966888428,
+          "lpips": 0.7057432025671005
+        }
+      },
+      "dust": {
+        "n_images": 24,
+        "colorizer": {
+          "psnr": 16.308339834213257,
+          "ssim": 0.4985400295505921,
+          "lpips": 0.8406586969892184
+        },
+        "degraded_visible": {
+          "psnr": 8.172570665677389,
+          "ssim": 0.2810133444145322,
+          "lpips": 0.640163715928793
+        }
+      },
+      "dust+dark": {
+        "n_images": 26,
+        "colorizer": {
+          "psnr": 16.97476104589609,
+          "ssim": 0.4984700089463821,
+          "lpips": 0.8223102780488821
+        },
+        "degraded_visible": {
+          "psnr": 14.918375712174635,
+          "ssim": 0.35664591307823473,
+          "lpips": 0.8896527416430987
+        }
+      },
+      "fog": {
+        "n_images": 24,
+        "colorizer": {
+          "psnr": 17.05081929763158,
+          "ssim": 0.4926872743914525,
+          "lpips": 0.827336460351944
+        },
+        "degraded_visible": {
+          "psnr": 5.707554072141647,
+          "ssim": 0.2753982609137893,
+          "lpips": 0.6514767793317636
+        }
+      },
+      "smoke": {
+        "n_images": 23,
+        "colorizer": {
+          "psnr": 19.486942332723867,
+          "ssim": 0.537829968592395,
+          "lpips": 0.7871447101883267
+        },
+        "degraded_visible": {
+          "psnr": 13.932939923327902,
+          "ssim": 0.4521135512901389,
+          "lpips": 0.49936555811892386
+        }
+      },
+      "smoke+dark": {
+        "n_images": 28,
+        "colorizer": {
+          "psnr": 17.261803218296595,
+          "ssim": 0.5298262637640748,
+          "lpips": 0.8040708409888404
+        },
+        "degraded_visible": {
+          "psnr": 16.947979382106237,
+          "ssim": 0.45252603718212675,
+          "lpips": 0.8280390511666026
+        }
+      }
+    },
+    "note": "The colorizer input is thermal, which the synthetic conditions do not change; per-condition colorizer rows differ only by which pairs carry that condition.",
+    "ids": [
+      "llvip_190055",
+      "llvip_190163",
+      "llvip_190239",
+      "llvip_190252",
+      "llvip_190415",
+      "llvip_190482",
+      "llvip_190651",
+      "llvip_190666",
+      "llvip_190696",
+      "llvip_190719",
+      "llvip_190742",
+      "llvip_190820",
+      "llvip_200007",
+      "llvip_200200",
+      "llvip_200239",
+      "llvip_210088",
+      "llvip_210130",
+      "llvip_210257",
+      "llvip_210289",
+      "llvip_210317",
+      "llvip_210323",
+      "llvip_220010",
+      "llvip_220021",
+      "llvip_220097",
+      "llvip_220205",
+      "llvip_220230",
+      "llvip_220332",
+      "llvip_220345",
+      "llvip_220350",
+      "llvip_230100",
+      "llvip_230121",
+      "llvip_230206",
+      "llvip_230369",
+      "llvip_230371",
+      "llvip_240014",
+      "llvip_240015",
+      "llvip_240220",
+      "llvip_240229",
+      "llvip_240297",
+      "llvip_240326",
+      "llvip_240340",
+      "llvip_240361",
+      "llvip_240428",
+      "llvip_240435",
+      "llvip_260067",
+      "llvip_260215",
+      "llvip_260304",
+      "llvip_260505",
+      "llvip_260507",
+      "llvip_260536"
+    ]
+  },
+  "detection": {
+    "iou": 0.5,
+    "conf_for_pr": 0.25,
+    "conf_for_map": 0.001,
+    "nms_iou": 0.5,
+    "imgsz": 1024,
+    "detector": "YOLO (human_detection/runs/thermal/colab_resumed/weights/best.pt) imgsz=1024 conf=0.25 iou=0.5",
+    "thermal_subset": {
+      "images": 100,
+      "precision": 0.24,
+      "recall": 0.028985507246376812,
+      "map50": 0.026391500684363717,
+      "tp": 6,
+      "fp": 19,
+      "fn": 201,
+      "gt": 207
+    },
+    "thermal_runtime": {
+      "images": 13,
+      "precision": 0.0,
+      "recall": 0.0,
+      "map50": 0.0,
+      "tp": 0,
+      "fp": 1,
+      "fn": 15,
+      "gt": 15
+    },
+    "colorized": {
+      "images": 13,
+      "input": "enhanced_rgb of branch A (pre-enhance, EDSR x2, colorizer), boxes mapped back to the thermal frame",
+      "precision": 0.0,
+      "recall": 0.0,
+      "map50": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 15,
+      "gt": 15
+    }
+  },
+  "runtime": {
+    "device_label": "CPU",
+    "device": "CPU (x86_64, 4 threads)",
+    "images_timed": 10,
+    "warmup_skipped": 3,
+    "mean_s": {
+      "parallel": 68.4505404282002,
+      "sequential": 69.51220317229999,
+      "branch_a": 69.11773097869991,
+      "branch_b": 0.37920944640009113
+    },
+    "std_s": {
+      "parallel": 2.67215208381928,
+      "sequential": 3.0804880747108383,
+      "branch_a": 3.0906039861892127,
+      "branch_b": 0.03946615439149967
+    },
+    "note": "branch_a/branch_b are from the sequential runs (each branch alone)"
+  },
+  "figure": {
+    "file": "docs/report_metrics/figures/infravision_output.png",
+    "source_image": "T2_0136_45.254.JPG",
+    "gt_people": 2,
+    "tp": 1,
+    "fp": 0,
+    "detections": 1,
+    "rule": "most TP with zero FP at conf_for_pr among the POP subset",
+    "notes": [
+      "detector is the FLIR street-scene model, not trained on POP drone views yet"
+    ]
+  }
+}
