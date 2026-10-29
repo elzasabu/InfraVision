@@ -1,0 +1,40 @@
+{
+  "close_up": {
+    "file": "T3_0259_47.598.JPG",
+    "n_gt": 1,
+    "tp": 1,
+    "fp": 1,
+    "min_tp_score": 0.5197194814682007,
+    "mean_tp_score": 0.5197194814682007,
+    "gt_median_h": 54.0,
+    "matched_min_h": 54.0
+  },
+  "group": {
+    "file": "T2_0088_54.842.JPG",
+    "n_gt": 2,
+    "tp": 1,
+    "fp": 0,
+    "min_tp_score": 0.7422903776168823,
+    "mean_tp_score": 0.7422903776168823,
+    "gt_median_h": 44.5,
+    "matched_min_h": 54.0
+  },
+  "hard_small": {
+    "file": "T2_0112_47.494.JPG",
+    "n_gt": 3,
+    "tp": 1,
+    "fp": 0,
+    "min_tp_score": 0.4378311336040497,
+    "mean_tp_score": 0.4378311336040497,
+    "gt_median_h": 31.0,
+    "matched_min_h": 44.0
+  },
+  "summary": {
+    "images": 300,
+    "people": 609,
+    "found": 19,
+    "false_alarms": 43,
+    "frames_all_found_no_fp": 0,
+    "detector": "YOLO (human_detection/runs/thermal/colab_resumed/weights/best.pt) imgsz=1024 conf=0.25 iou=0.5"
+  }
+}

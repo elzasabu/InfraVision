@@ -438,6 +438,31 @@ def n_tot(v):
     return f"{v:,}".replace(",", "{,}")
 
 
+def write_notes(M, path):
+    T, S, C, E, R = (M[k] for k in ("training", "sr", "colorization", "detection", "runtime"))
+    col = T["Colorizer"]
+    sb, se = S["means"]["bicubic"], S["means"]["edsr"]
+    cl = C["groups"]["Clear"]
+    ta, tb = E["thermal_runtime"], E["colorized"]
+    txt = (
+        "# Report metrics: notes\n\n"
+        f"Models: the YOLO11s detector is fully trained ({T['YOLO']['epochs_run']} epochs) but on FLIR street scenes, "
+        "not on POP; the EDSR checkpoint is preliminary (an older 10-epoch run on non-POP data); the colorizer is "
+        f"preliminary ({col.get('epochs')} epochs on {col.get('data', 'n/a')}, CPU, {col.get('minutes')} min). "
+        f"Subsets (seed {M['seed']}): SR on {S['n']} POP test images, colorization on {C['n_pairs']} synthetic test pairs "
+        f"({C['n_degraded']} degraded images), detection on {E['thermal_subset']['images']} POP test images for the thermal "
+        f"input and on {tb['images']} images for the colorized input (the same images as the runtime test), runtime on "
+        f"{R['images_timed']} images after {R['warmup_skipped']} warm-up runs, on {R['device']}. "
+        f"Surprising results: EDSR is worse than bicubic ({se['psnr']:.2f} vs {sb['psnr']:.2f} dB PSNR), and the detector "
+        f"finds few POP people (recall {E['thermal_subset']['recall']:.3f}, mAP@0.5 {E['thermal_subset']['map50']:.3f} on "
+        f"thermal; {tb['recall']:.3f} / {tb['map50']:.3f} on colorized vs {ta['recall']:.3f} / {ta['map50']:.3f} on thermal "
+        "for the same images). "
+        "Interpretation: these numbers measure untrained-on-target models, so they show the pipeline runs end to end but "
+        "not what it can reach once EDSR, the colorizer and YOLO are trained on POP and the paired set on a GPU.\n"
+    )
+    path.write_text(txt)
+
+
 # ---------------------------------------------------------------- main
 
 def main():
@@ -457,9 +482,15 @@ def main():
     p.add_argument("--col_train_pairs", type=int, default=75)
     p.add_argument("--col_val_pairs", type=int, default=25)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--from_json", action="store_true", help="only rewrite the .tex and NOTES.md from metrics.json")
     p.add_argument("--skip", default="", help="comma list of sections to skip (sr,color,det,runtime)")
     a = p.parse_args()
     skip = set(filter(None, a.skip.split(",")))
+    if a.from_json:
+        M = json.load(open(OUT / "metrics.json"))
+        write_tex(M, OUT / "results_tables.tex")
+        write_notes(M, OUT / "NOTES.md")
+        return
 
     random.seed(a.seed); np.random.seed(a.seed); torch.manual_seed(a.seed)
     (OUT / "figures").mkdir(parents=True, exist_ok=True)
@@ -550,6 +581,7 @@ def main():
     json.dump(M, open(OUT / "metrics.json", "w"), indent=2, default=float)
     if all(k in M for k in ("sr", "colorization")):
         write_tex(M, OUT / "results_tables.tex")
+        write_notes(M, OUT / "NOTES.md")
     print("done", flush=True)
 
 
