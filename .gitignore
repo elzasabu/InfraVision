@@ -21,3 +21,4 @@ human_detection/datasets/flir_align/
 human_detection/datasets/pop/
 human_detection/datasets/thermal_person/
 SR/dataset_pop/
+checkpoints/
