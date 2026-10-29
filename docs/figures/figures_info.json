@@ -1,0 +1,85 @@
+{
+  "pipeline": {
+    "sr": "EDSR (SR/checkpoints/ssim_residual/edsr_ssim_residual_epoch_10.pth) x2",
+    "colorizer": "colorizer (checkpoints/colorizer/colorizer_best.pth)",
+    "detector": "YOLO (human_detection/runs/thermal/colab_resumed/weights/best.pt) imgsz=1024 conf=0.25 iou=0.5",
+    "pre_enhance": {
+      "enabled": true,
+      "clahe": true,
+      "clahe_clip": 2.0,
+      "clahe_tiles": 8,
+      "denoise": true,
+      "denoise_strength": 5
+    },
+    "notes": [
+      "detector is the FLIR street-scene model, not trained on POP drone views yet"
+    ]
+  },
+  "frames": {
+    "output_1.png": {
+      "file": "T3_0259_47.598.JPG",
+      "kind": "close_up",
+      "people": 2,
+      "scores": [
+        0.636,
+        0.52
+      ],
+      "timings": {
+        "load": 0.01,
+        "pre_enhance": 1.49,
+        "super_resolution": 64.88,
+        "colorize": 4.15,
+        "branch_a": 70.53,
+        "branch_b": 0.72,
+        "fusion": 0.04,
+        "total": 70.58
+      },
+      "notes": [
+        "detector is the FLIR street-scene model, not trained on POP drone views yet"
+      ]
+    },
+    "output_2.png": {
+      "file": "T2_0088_54.842.JPG",
+      "kind": "group",
+      "people": 1,
+      "scores": [
+        0.742
+      ],
+      "timings": {
+        "load": 0.01,
+        "pre_enhance": 1.32,
+        "super_resolution": 60.49,
+        "colorize": 3.73,
+        "branch_a": 65.54,
+        "branch_b": 0.45,
+        "fusion": 0.0,
+        "total": 65.55
+      },
+      "notes": [
+        "detector is the FLIR street-scene model, not trained on POP drone views yet"
+      ]
+    },
+    "output_3.png": {
+      "file": "T2_0112_47.494.JPG",
+      "kind": "hard_small",
+      "people": 1,
+      "scores": [
+        0.438
+      ],
+      "timings": {
+        "load": 0.02,
+        "pre_enhance": 1.59,
+        "super_resolution": 61.7,
+        "colorize": 4.94,
+        "branch_a": 68.24,
+        "branch_b": 0.4,
+        "fusion": 0.0,
+        "total": 68.26
+      },
+      "notes": [
+        "detector is the FLIR street-scene model, not trained on POP drone views yet"
+      ]
+    }
+  },
+  "stages_from": "T3_0259_47.598.JPG"
+}
