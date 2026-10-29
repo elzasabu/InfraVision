@@ -1,0 +1,7 @@
+{
+ "source": "device_list_dir of human_detection/datasets/flir_align/thermal/{train,test} on the laptop, 2026-10-29",
+ "thermal_images": {
+  "test": 1013,
+  "train": 2000
+ }
+}
