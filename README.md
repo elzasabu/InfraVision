@@ -224,8 +224,12 @@ repo, mounts Drive, unzips `POP.zip` and `paired_disaster_colab.zip`
 SR -> colorizer -> YOLO (then tunes the YOLO thresholds and evaluates),
 saves each model to Drive as soon as it is done, and zips the
 `checkpoints/` folder for the laptop. Stages already on Drive are skipped, so
-a disconnected session can just be run again. `SMOKE = True` in the first
-cell checks the whole notebook in a few minutes.
+a disconnected session can just be run again: each model saves its progress
+to Drive after every epoch and continues from there (`--resume`). `SMOKE = True`
+in the first cell checks the whole notebook in a few minutes.
+
+Step-by-step guide (zips, Drive folder, epochs, what to watch in the logs,
+when to stop, what to download): [docs/TRAINING.md](docs/TRAINING.md).
 
 ## Earlier per-stage scripts
 

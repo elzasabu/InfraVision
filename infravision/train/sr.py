@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader, Subset
 from ..data.pop import POP_ROOT, POPSRCrops, pop_splits
 from ..enhance import build_edsr
 from ..metrics import psnr, ssim
-from .common import CHECKPOINTS, BestKeeper, add_common_args, autocast, setup
+from .common import CHECKPOINTS, BestKeeper, Resumer, add_common_args, autocast, setup
 
 
 def main(argv=None):
@@ -62,13 +62,14 @@ def main(argv=None):
     meta = dict(model="EDSR", in_channels=1, channels=args.channels, num_blocks=args.blocks,
                 global_residual=True, scale=args.scale, trained_on="POP train flights")
     keeper = BestKeeper(out, "edsr", "val_psnr", meta)
+    resumer = Resumer(out, keeper, args.resume, model=model, opt=opt, sched=sched, scaler=scaler)
 
     # Baseline: what bicubic alone gives on the same val crops.
     with torch.no_grad():
         b_psnr = torch.stack([psnr(x, y) for x, y in vl]).mean().item()
     print(f"val PSNR of bicubic input: {b_psnr:.2f} dB")
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(resumer.start_epoch(), args.epochs + 1):
         model.train()
         tot = n = 0
         for x, y in tl:
@@ -97,6 +98,8 @@ def main(argv=None):
         best = keeper.update(epoch, model.state_dict(), m, vars(args))
         print(f"epoch {epoch}/{args.epochs} loss {m['train_loss']:.4f} val PSNR {m['val_psnr']:.2f} dB "
               f"SSIM {m['val_ssim']:.4f}" + ("  *best*" if best else ""), flush=True)
+        resumer.end_epoch(epoch, args.epochs)
+    resumer.finish()
     print("Best:", keeper.best, "->", out / "edsr_best.pth")
 
 

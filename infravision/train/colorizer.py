@@ -27,7 +27,7 @@ from ..config import load_config
 from ..data.paired import DISASTER_DIR, PairedColor, disaster_pairs, flir_pairs
 from ..enhance import build_colorizer, cyclegan_module, state_dict_of
 from ..metrics import psnr, ssim
-from .common import CHECKPOINTS, BestKeeper, add_common_args, autocast, setup
+from .common import CHECKPOINTS, BestKeeper, Resumer, add_common_args, autocast, setup
 
 
 class VGGPerceptual(nn.Module):
@@ -120,8 +120,9 @@ def main(argv=None):
                 work_side=args.work_side, pre_enhance=pre, perceptual=perc is not None,
                 trained_on="data/paired_disaster clean RGB" + (" + FLIR" if args.flir else ""))
     keeper = BestKeeper(out, "colorizer", "val_psnr", meta)
+    resumer = Resumer(out, keeper, args.resume, G=G, opt=opt, sched=sched, scaler=scaler, D=D, opt_D=opt_D)
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(resumer.start_epoch(), args.epochs + 1):
         G.train()
         tot = n = 0
         for step, (t, v) in enumerate(tl, 1):
@@ -171,6 +172,8 @@ def main(argv=None):
         best = keeper.update(epoch, G.state_dict(), m, vars(args))
         print(f"epoch {epoch}/{args.epochs} loss {m['train_loss']:.4f} val PSNR {m['val_psnr']:.2f} dB "
               f"SSIM {m['val_ssim']:.4f}" + ("  *best*" if best else ""), flush=True)
+        resumer.end_epoch(epoch, args.epochs)
+    resumer.finish()
     print("Best:", keeper.best, "->", out / "colorizer_best.pth")
 
 
