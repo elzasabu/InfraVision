@@ -1,0 +1,53 @@
+{
+  "pairs": 15488,
+  "degraded_images": 46464,
+  "pairs_per_split": {
+    "train": 11431,
+    "val": 594,
+    "test": 3463
+  },
+  "degraded_per_split": {
+    "train": 34293,
+    "val": 1782,
+    "test": 10389
+  },
+  "per_condition": {
+    "smoke+dark": 7614,
+    "dust": 7736,
+    "dust+dark": 7813,
+    "smoke": 7717,
+    "fog": 7793,
+    "dark": 7791
+  },
+  "per_severity": {
+    "light": 15266,
+    "heavy": 15546,
+    "medium": 15652
+  },
+  "per_source": {
+    "llvip": 15488
+  },
+  "variants_per_pair": {
+    "3": 15488
+  },
+  "pairs_with_labels": 15488,
+  "person_boxes": 42432,
+  "files_not_in_manifest": 0,
+  "files_not_in_manifest_examples": [],
+  "problems": {},
+  "quick": false,
+  "grid_ids": [
+    "llvip_230271",
+    "llvip_100098",
+    "llvip_190820",
+    "llvip_250054",
+    "llvip_100677",
+    "llvip_020067",
+    "llvip_080813",
+    "llvip_120382",
+    "llvip_110450",
+    "llvip_100421",
+    "llvip_260090",
+    "llvip_210094"
+  ]
+}

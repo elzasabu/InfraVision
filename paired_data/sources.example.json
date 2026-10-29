@@ -1,0 +1,8 @@
+[
+  {"type": "llvip", "root": "D:/datasets/LLVIP"},
+  {"type": "dronevehicle", "root": "D:/datasets/DroneVehicle", "max": 10000},
+  {"type": "folders", "name": "wisard", "thermal": "D:/datasets/WiSARD/thermal", "rgb": "D:/datasets/WiSARD/rgb",
+   "labels": "D:/datasets/WiSARD/labels", "strip": "_(ir|thermal|rgb|vis|visible)$"},
+  {"type": "folders", "name": "flame2", "thermal": "D:/datasets/FLAME2/IR", "rgb": "D:/datasets/FLAME2/RGB",
+   "strip": "_(ir|rgb)$", "split": "train"}
+]
