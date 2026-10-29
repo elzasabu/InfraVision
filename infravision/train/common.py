@@ -1,5 +1,6 @@
 """Shared bits for the training scripts: device/AMP setup, best-checkpoint saving."""
 import json
+import os
 import time
 from pathlib import Path
 
@@ -21,6 +22,8 @@ def add_common_args(p, out_default):
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--smoke", action="store_true",
                    help="tiny run (few images, few steps) to check the code path on a CPU")
+    p.add_argument("--resume", action="store_true",
+                   help="continue from <out>/last.pth if it exists (saved after every epoch)")
     return p
 
 
@@ -66,3 +69,51 @@ class BestKeeper:
                            config=extra_config or {}, meta=self.meta,
                            minutes=round((time.time() - self.t0) / 60, 2)), f, indent=2)
         return improved
+
+
+def atomic_torch_save(obj, path):
+    """Write to a temp file, then rename, so a disconnect never leaves a half-written file."""
+    path = Path(path)
+    tmp = path.with_name(path.name + ".tmp")
+    torch.save(obj, tmp)
+    os.replace(tmp, path)
+
+
+class Resumer:
+    """Saves <out>/last.pth after every epoch and, with --resume, continues from it.
+
+    `objs` are the things whose state must survive a disconnect (models,
+    optimisers, schedulers, AMP scaler); None entries are ignored. The best
+    checkpoint and the metrics history of `keeper` are restored too, so
+    metrics.json keeps every epoch. A finished run writes <out>/DONE.
+    """
+
+    def __init__(self, out, keeper, resume, **objs):
+        self.out, self.keeper, self.resume = Path(out), keeper, resume
+        self.objs = {k: v for k, v in objs.items() if v is not None}
+        self.last = self.out / "last.pth"
+        self.t_epoch = time.time()
+
+    def start_epoch(self):
+        if not (self.resume and self.last.exists()):
+            if self.resume:
+                print(f"--resume: no {self.last} yet, starting from epoch 1")
+            return 1
+        ck = torch.load(self.last, map_location="cpu", weights_only=False)
+        for k, v in self.objs.items():
+            if k in ck["state"]:
+                v.load_state_dict(ck["state"][k])
+        self.keeper.best, self.keeper.history = ck["best"], ck["history"]
+        print(f"resumed from {self.last}: epoch {ck['epoch']} done, best so far {self.keeper.best}")
+        return ck["epoch"] + 1
+
+    def end_epoch(self, epoch, epochs):
+        atomic_torch_save(dict(epoch=epoch, state={k: v.state_dict() for k, v in self.objs.items()},
+                               best=self.keeper.best, history=self.keeper.history), self.last)
+        dt = time.time() - self.t_epoch
+        self.t_epoch = time.time()
+        left = (epochs - epoch) * dt / 60
+        print(f"  epoch {epoch} took {dt / 60:.1f} min; about {left:.0f} min left; saved {self.last.name}", flush=True)
+
+    def finish(self):
+        (self.out / "DONE").write_text(json.dumps(dict(best=self.keeper.best), indent=2))

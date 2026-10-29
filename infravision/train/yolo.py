@@ -15,11 +15,13 @@ which the pipeline config picks up automatically.
 """
 import argparse
 import json
+import os
 import shutil
 import time
 from pathlib import Path
 
 import numpy as np
+import torch
 
 from ..config import ROOT, load_config, pick_device
 from ..data.pop import POP_ROOT, pop_splits
@@ -191,6 +193,22 @@ def records_for(args):
 
 # ---------------------------------------------------------------- commands
 
+def _keep_good_copy(trainer):
+    """After Ultralytics saves last.pt, keep a complete copy (a disconnect can cut last.pt mid-write)."""
+    last = Path(trainer.last)
+    if last.exists():
+        tmp = last.with_name("last_good.pt.tmp")
+        shutil.copy2(last, tmp)
+        os.replace(tmp, last.with_name("last_good.pt"))
+
+
+def _load(path):
+    try:
+        return torch.load(path, map_location="cpu", weights_only=False)
+    except Exception:
+        return None
+
+
 def cmd_train(args):
     from ultralytics import YOLO
 
@@ -203,16 +221,41 @@ def cmd_train(args):
     if args.smoke or not yaml_path.exists() or args.rebuild:
         yaml_path = write_yolo_dataset(args.pop, data_root, args.max_per_split)
     device = pick_device(args.device)
-    model = YOLO(args.start)
-    model.train(data=str(yaml_path), epochs=args.epochs, imgsz=args.imgsz, batch=args.batch,
-                patience=args.patience, workers=args.workers, single_cls=True, seed=args.seed,
-                device=0 if device.type == "cuda" else "cpu", amp=device.type == "cuda",
-                project=str(CHECKPOINTS / ("smoke" if args.smoke else "yolo_runs")), name="yolo_run" if args.smoke else args.name,
-                exist_ok=True, plots=not args.smoke)
-    best = Path(model.trainer.best)
+    project = Path(args.project or CHECKPOINTS / ("smoke" if args.smoke else "yolo_runs"))
+    name = "yolo_run" if args.smoke else args.name
+    last = project / name / "weights" / "last.pt"
+    good = last.with_name("last_good.pt")
+    ck = _load(last) if args.resume and last.exists() else None
+    if args.resume and last.exists() and ck is None and good.exists():
+        print(f"{last.name} is damaged (cut off mid-write); using {good.name}")
+        shutil.copy2(good, last)
+        ck = _load(last)
+    # Ultralytics strips the optimizer from last.pt when a run finishes.
+    finished = ck is not None and (ck.get("optimizer") is None or ck.get("epoch", -1) == -1)
+    if finished:
+        print(f"{last.parent.parent.name} already finished; keeping its best.pt")
+        best = last.with_name("best.pt")
+    elif ck is not None:
+        # Ultralytics saves last.pt after every epoch; resume=True continues with the same settings.
+        print("resuming YOLO from", last)
+        model = YOLO(str(last))
+        model.add_callback("on_model_save", _keep_good_copy)
+        model.train(resume=True)
+        best = Path(model.trainer.best)
+    else:
+        if args.resume:
+            print(f"--resume: no {last} yet, starting a new run")
+        model = YOLO(args.start)
+        model.add_callback("on_model_save", _keep_good_copy)
+        model.train(data=str(yaml_path), epochs=args.epochs, imgsz=args.imgsz, batch=args.batch,
+                    patience=args.patience, workers=args.workers, single_cls=True, seed=args.seed,
+                    device=0 if device.type == "cuda" else "cpu", amp=device.type == "cuda",
+                    project=str(project), name=name, exist_ok=True, plots=not args.smoke)
+        best = Path(model.trainer.best)
     out = Path(args.out or CHECKPOINTS / ("smoke/yolo" if args.smoke else "yolo"))
     out.mkdir(parents=True, exist_ok=True)
     shutil.copy2(best, out / "best.pt")
+    (out / "DONE").write_text(str(best))
     print("Best weights ->", out / "best.pt")
 
 
@@ -301,6 +344,9 @@ def main(argv=None):
     t.add_argument("--seed", type=int, default=0)
     t.add_argument("--device", default="auto")
     t.add_argument("--name", default="pop_1024")
+    t.add_argument("--project", default=None,
+                   help="folder for the Ultralytics run (default checkpoints/yolo_runs); put it on Drive to survive a disconnect")
+    t.add_argument("--resume", action="store_true", help="continue <project>/<name>/weights/last.pt if it exists")
     t.add_argument("--out", default=None, help="default checkpoints/yolo (checkpoints/smoke/yolo with --smoke)")
     t.add_argument("--smoke", action="store_true")
     common(sub.add_parser("eval"))

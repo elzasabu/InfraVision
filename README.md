@@ -68,6 +68,22 @@ python -m pytest -q                # 29 tests, a few seconds, no data needed
 build of PyTorch, install `torch`/`torchvision` from https://pytorch.org
 first (same versions), then the requirements.
 
+**CPU-only Linux machine:** plain `pip install` on Linux pulls the large CUDA
+build of PyTorch. To get the small CPU build, install torch first:
+
+```bash
+pip install torch==2.15.0 torchvision==0.29.2 --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
+```
+
+(Windows and macOS get the CPU build from `pip install -r requirements.txt` directly.)
+
+**Running the demo needs weights.** A fresh clone has none. Unzip
+`infravision_checkpoints.zip` (see [Model weights](#model-weights)) in the repo
+folder first; `checkpoints/yolo/best.pt` alone is enough for the app to start
+(without the SR and colorizer weights it uses bicubic upscaling and a
+false-colour map, and says so on screen).
+
 ## Model weights
 
 Weights are **not in git** (`*.pt`, `*.pth` and `checkpoints/` are ignored)
@@ -224,8 +240,12 @@ repo, mounts Drive, unzips `POP.zip` and `paired_disaster_colab.zip`
 SR -> colorizer -> YOLO (then tunes the YOLO thresholds and evaluates),
 saves each model to Drive as soon as it is done, and zips the
 `checkpoints/` folder for the laptop. Stages already on Drive are skipped, so
-a disconnected session can just be run again. `SMOKE = True` in the first
-cell checks the whole notebook in a few minutes.
+a disconnected session can just be run again: each model saves its progress
+to Drive after every epoch and continues from there (`--resume`). `SMOKE = True`
+in the first cell checks the whole notebook in a few minutes.
+
+Step-by-step guide (zips, Drive folder, epochs, what to watch in the logs,
+when to stop, what to download): [docs/TRAINING.md](docs/TRAINING.md).
 
 ## Earlier per-stage scripts
 
