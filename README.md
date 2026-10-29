@@ -68,6 +68,22 @@ python -m pytest -q                # 29 tests, a few seconds, no data needed
 build of PyTorch, install `torch`/`torchvision` from https://pytorch.org
 first (same versions), then the requirements.
 
+**CPU-only Linux machine:** plain `pip install` on Linux pulls the large CUDA
+build of PyTorch. To get the small CPU build, install torch first:
+
+```bash
+pip install torch==2.15.0 torchvision==0.29.2 --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
+```
+
+(Windows and macOS get the CPU build from `pip install -r requirements.txt` directly.)
+
+**Running the demo needs weights.** A fresh clone has none. Unzip
+`infravision_checkpoints.zip` (see [Model weights](#model-weights)) in the repo
+folder first; `checkpoints/yolo/best.pt` alone is enough for the app to start
+(without the SR and colorizer weights it uses bicubic upscaling and a
+false-colour map, and says so on screen).
+
 ## Model weights
 
 Weights are **not in git** (`*.pt`, `*.pth` and `checkpoints/` are ignored)
