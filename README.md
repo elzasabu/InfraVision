@@ -1,106 +1,107 @@
 # InfraVision
 
-InfraVision is a PyTorch research project for thermal (infrared) imagery. It
-enhances a thermal image and detects the people in it, with an optional
-thermal-to-colour translation step.
+**Thermal infrared image super-resolution and colorization with person
+detection, for disaster response and search and rescue.**
 
-![Original, SwinIR-enhanced and detection output](integrated_outputs/infravision_comparison.png)
+InfraVision takes one thermal frame (for example from a drone over a flood,
+wildfire smoke or a collapsed building) and returns one image: the frame
+enhanced, upscaled and colorized, with the people found in it boxed and
+counted. POP (drone thermal, people) is the primary dataset; LLVIP and FLIR
+supply thermal/RGB pairs for the colorizer. See [docs/RESULTS.md](docs/RESULTS.md)
+for current numbers and [DATASETS.md](DATASETS.md) for data sources and
+licences.
+
+![10 POP test frames: thermal with ground truth | fused output](docs/results/pop_test_grid.jpg)
 
 ## Pipeline
 
-| Stage | Folder | Model | Role |
+```
+thermal frame
+ ├─ Branch A: CLAHE + denoise -> EDSR super-resolution -> thermal-to-RGB colorizer
+ └─ Branch B (in parallel): YOLO11 person detection on the original frame
+fusion: boxes rescaled to the upscaled frame, drawn with confidence + "People: N"
+```
+
+| Stage | Code | Model | Trained on |
 |---|---|---|---|
-| Enhancement | `SR/` | EDSR and a SwinIR-style refinement network | Restores detail in degraded thermal images |
-| Person detection | `human_detection/` | YOLO11s (Ultralytics) | Finds people in thermal images |
-| Colorization | `colorization/` | CycleGAN | Translates single-channel thermal into RGB (standalone) |
+| Pre-enhance | `infravision/enhance.py` | CLAHE + non-local-means denoise (configurable) | - |
+| Super-resolution | `infravision/enhance.py`, `infravision/train/sr.py` | EDSR, x2 by default | POP |
+| Colorizer | `infravision/enhance.py`, `infravision/train/colorizer.py` | ResNet generator, L1 + VGG (+ optional SSIM / GAN) | LLVIP pairs (+ synthetic disaster variants), FLIR optional |
+| Detection | `infravision/detect.py`, `infravision/train/yolo.py` | YOLO11s (Ultralytics), one class "person" | POP |
+| Pipeline + fusion | `infravision/pipeline.py`, `infravision/fusion.py` | runs both branches in a thread pool | - |
 
-`integrate_infravision.py` ties the first two together:
-
-1. Loads a thermal test image.
-2. Enhances it with SwinIR. The enhanced image is used **for display only**.
-3. Runs YOLO on the **original** thermal image. YOLO was trained on raw
-   thermal frames, and feeding it the SwinIR output roughly halved recall in
-   testing.
-4. Draws the detections on the enhanced image and saves the results to
-   `integrated_outputs/`.
-
-Colorization is not wired into the integrated script yet; run it on its own
-(see below).
+Settings live in `configs/infravision.yaml`.
 
 ## Repository layout
 
 ```
 InfraVision/
-├── integrate_infravision.py   # end-to-end demo: enhance + detect
-├── integrated_outputs/        # demo results
-├── SR/                        # super-resolution / enhancement
-│   ├── models/                # edsr.py, swinir_refine.py
-│   ├── prepare_dataset.py     # DIV2K degradation pairs
-│   ├── prepare_pop_dataset.py # POP thermal degradation pairs
-│   ├── train*.py              # EDSR, SwinIR and EDSR+Swin training variants
-│   └── evaluate*.py, test*.py # PSNR / SSIM evaluation
-├── human_detection/           # YOLO11s person detection
-│   ├── datasets/              # convert_flir.py, convert_pop.py (COCO -> YOLO)
-│   ├── organize_dataset.py    # builds thermal_person train/val/test split
-│   ├── train.py, detect.py, evaluate.py
-│   └── data.yaml
-├── colorization/              # CycleGAN thermal -> RGB
-│   ├── train_cyclegan.py
-│   └── colorize.py
-└── colab_training/            # Colab / Kaggle notebooks for long YOLO runs
+├── app.py                     # Gradio demo (3 panels), runs on CPU
+├── configs/infravision.yaml   # pipeline settings and weight search order
+├── infravision/               # the package: pipeline, models, data loaders, CLI
+│   ├── pipeline.py, enhance.py, detect.py, fusion.py, infer.py, evaluate.py
+│   ├── data/                  # POP loader (flight splits), paired thermal/RGB loader
+│   └── train/                 # sr.py, colorizer.py, yolo.py, smoke.py
+├── notebooks/train_colab.ipynb  # full training on a free Colab GPU
+├── paired_data/               # builds the LLVIP thermal/RGB "disaster" pairs
+├── tests/                     # pytest
+├── docs/RESULTS.md            # metrics, qualitative grid, CPU timings
+├── checkpoints/               # trained weights (git-ignored, see below)
+├── SR/, human_detection/, colorization/, colab_training/   # earlier per-stage scripts
+└── integrate_infravision.py   # earlier enhance + detect demo
 ```
 
 ## Installation
 
-Python 3.10+ is recommended. A CUDA GPU is strongly recommended for training;
-the demo also runs on CPU.
+Python 3.10+ (tested on 3.13). No GPU needed to run the demo or the tests.
 
 ```bash
 git clone https://github.com/elzasabu/InfraVision.git
 cd InfraVision
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-
-# PyTorch: pick the command for your CUDA version from https://pytorch.org
-pip install torch torchvision
-
-pip install ultralytics opencv-python pillow numpy matplotlib tqdm scikit-image
+pip install -r requirements.txt
+python -m pytest -q                # 29 tests, a few seconds, no data needed
 ```
 
-The Colab notebooks pin `ultralytics==8.4.177`; use the same version if you
-want results that match the trained weights exactly.
+`requirements.txt` pins the versions everything was tested with. For a CUDA
+build of PyTorch, install `torch`/`torchvision` from https://pytorch.org
+first (same versions), then the requirements.
 
-> **Note:** the committed `requirements.txt` is UTF-16 encoded, includes many
-> packages this project does not use, and is missing `ultralytics` and
-> `opencv-python`. Use the commands above until it is cleaned up.
+## Model weights
 
-## Model weights and datasets
+Weights are **not in git** (`*.pt`, `*.pth` and `checkpoints/` are ignored)
+and not in Git LFS. Share them as a GitHub release asset or a zip:
 
-Weights (`*.pt`, `*.pth`) and datasets are excluded by `.gitignore`, so a
-fresh clone cannot run anything until you put them in place. Paths below are
-relative to the repository root.
+1. Train with `notebooks/train_colab.ipynb`; at the end it saves
+   `infravision_checkpoints.zip` to Drive.
+2. Upload that zip to a GitHub release (Releases -> Draft a new release ->
+   attach the file), or share it from Drive.
+3. On another machine, unzip it in the repo root. It creates:
 
-### Weights
+```
+checkpoints/sr/edsr_best.pth               (+ metrics.json)
+checkpoints/colorizer/colorizer_best.pth   (+ metrics.json)
+checkpoints/yolo/best.pt                   (+ thresholds.json, metrics.json)
+```
 
-| File | Used by | Produced by |
+Without them the app still runs: it falls back to older weights if present
+(`SR/checkpoints*/`, `human_detection/runs/...`), shows a false-colour map
+instead of the colorizer, and says so on screen. YOLO needs at least one
+weights file; `yolo11s.pt` is downloaded by Ultralytics when training starts.
+
+## Datasets
+
+Nothing is redistributed; download each from its owner (see
+[DATASETS.md](DATASETS.md) for links, citations and licences). Paths are
+relative to the repo root.
+
+| Path | Contents | Needed for |
 |---|---|---|
-| `human_detection/runs/thermal/colab_resumed/weights/best.pt` | `integrate_infravision.py` | `colab_training/train_thermal_yolo_colab.ipynb` (FLIR thermal, training resumed on Colab) |
-| `human_detection/runs/pop/baseline/weights/best.pt` | `human_detection/detect.py` | `human_detection/train.py` (POP) |
-| `SR/checkpoints_pop/swinir_direct/swinir_direct_epoch_20.pth` | `integrate_infravision.py` | `SR/train_swinir.py` |
-| `colorization/checkpoints/cyclegan/colorizer_G_AB.pth` | `colorization/colorize.py` | `colorization/train_cyclegan.py` |
-
-`yolo11s.pt` (the pretrained starting point for `human_detection/train.py`) is
-downloaded automatically by Ultralytics.
-
-### Datasets
-
-| Path | Contents | Source |
-|---|---|---|
-| `POP/{train,test}/JPEGImages/` and `POP/{train,test}/Annotations/{split}.json` | POP drone thermal images with COCO annotations | POP dataset |
-| `human_detection/datasets/flir_align/` | `thermal/{train,test}/`, `visible/{train,test}/`, `coco_annotations/` | FLIR ADAS aligned (thermal + visible pairs) |
-| `SR/dataset/DIV2K_train_HR/` | DIV2K high-resolution images (optional, for the original SR experiments) | DIV2K |
-
-Derived datasets are generated from these with the scripts below.
+| `POP/{train,val,test}/JPEGImages/`, `POP/{split}/Annotations/{split}.json` | POP drone thermal frames, COCO person boxes | demo pick list, SR + YOLO training, all metrics |
+| `data/paired_disaster/` | LLVIP thermal + RGB pairs with synthetic smoke/fog/dust/dark RGB copies, built by `paired_data/build_paired_dataset.py` | colorizer training, 3-panel demo samples |
+| `human_detection/datasets/flir_align/` | FLIR ADAS aligned thermal + visible (optional) | extra colorizer pairs, earlier FLIR scripts |
+| `SR/dataset/DIV2K_train_HR/` | DIV2K (optional) | only the earlier SR experiments |
 
 ## POP data and splits
 
@@ -122,7 +123,7 @@ python -m infravision.data.pop --resplit --seed 0   # redraw train/val by flight
 
 In code: `from infravision.data.pop import pop_splits, POPDetection, POPSRCrops`.
 
-## Checkpoint folder (new pipeline)
+## Checkpoint folder
 
 The `infravision` package reads and the training scripts write one folder:
 
@@ -165,7 +166,7 @@ cd SR && python prepare_pop_dataset.py && cd ..     # -> SR/dataset_pop/
 The SR and colorization scripts use paths relative to their own folder, so run
 them from inside `SR/` or `colorization/`.
 
-## Running the integrated demo
+## Earlier demo (integrate_infravision.py)
 
 With the two weights files and `human_detection/datasets/thermal_person/images/test/`
 in place:
@@ -190,7 +191,7 @@ Outputs are written to `integrated_outputs/`:
 
 Detection uses `imgsz=640`, `conf=0.25` and `iou=0.5`.
 
-## New pipeline: demo app and batch CLI (runs on CPU)
+## Running the demo app and batch CLI (CPU is fine)
 
 ```bash
 python app.py                      # Gradio app at http://127.0.0.1:7860 (add --share for a public link)
@@ -202,7 +203,8 @@ boxed, people count) | real RGB (only for images that have a paired RGB, such
 as the synthetic disaster samples). It lists POP test frames and synthetic
 samples to pick from, shows per-branch timings, and offers the fused image as
 a download. "Fast" mode skips the 2x upscale. On a 4-core CPU a 1280x1024
-POP frame takes about 45 s at 2x and 15 s in fast mode.
+POP frame took about 46 s at 2x and 12 s in fast mode (see
+[docs/RESULTS.md](docs/RESULTS.md)).
 
 The CLI writes `<name>_fused.png` per image (`--all` adds the enhanced and SR
 frames), `detections.json` and `summary.csv`, and skips unreadable files with
@@ -225,7 +227,7 @@ saves each model to Drive as soon as it is done, and zips the
 a disconnected session can just be run again. `SMOKE = True` in the first
 cell checks the whole notebook in a few minutes.
 
-## Training and evaluating each stage
+## Earlier per-stage scripts
 
 **Super-resolution** (from `SR/`):
 
