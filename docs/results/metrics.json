@@ -1,0 +1,95 @@
+{
+  "colorizer": {
+    "methods": {
+      "grey thermal (baseline)": {
+        "psnr": 9.2479984998703,
+        "ssim": 0.1962626604596153
+      },
+      "false-colour map (baseline)": {
+        "psnr": 9.058615338802337,
+        "ssim": 0.20933527671732008
+      }
+    },
+    "pairs": 80,
+    "split": "val",
+    "synthetic_set": true,
+    "weights": null
+  },
+  "grid": {
+    "file": "docs/results/pop_test_grid.jpg",
+    "images": [
+      "T2_0000_50.15.JPG",
+      "T2_0091_53.135.JPG",
+      "T2_0181_45.616.JPG",
+      "T3_0012_47.152.JPG",
+      "T3_0102_48.958.JPG",
+      "T3_0192_51.692.JPG",
+      "T3_0283_50.5.JPG",
+      "T1_0036_29.808.JPG",
+      "T1_0126_50.406.JPG",
+      "T1_0216_49.837.JPG"
+    ],
+    "models": {
+      "sr": "EDSR (SR/checkpoints/ssim_residual/edsr_ssim_residual_epoch_10.pth) x2",
+      "colorizer": "false-colour map",
+      "detector": "YOLO (human_detection/runs/thermal/colab_resumed/weights/best.pt) imgsz=1024 conf=0.25 iou=0.5",
+      "pre_enhance": {
+        "enabled": true,
+        "clahe": true,
+        "clahe_clip": 2.0,
+        "clahe_tiles": 8,
+        "denoise": true,
+        "denoise_strength": 5
+      },
+      "notes": [
+        "no colorizer weights found: showing a 'inferno' false-colour map instead",
+        "detector is the FLIR street-scene model, not trained on POP drone views yet"
+      ]
+    }
+  },
+  "timing_cpu": {
+    "full (2x SR)": {
+      "load": 0.01,
+      "pre_enhance": 0.99,
+      "super_resolution": 44.69,
+      "colorize": 0.01,
+      "branch_a": 45.69,
+      "branch_b": 0.26,
+      "fusion": 0.0,
+      "total": 45.71,
+      "images": 3
+    },
+    "fast (1x)": {
+      "load": 0.01,
+      "pre_enhance": 1.03,
+      "super_resolution": 11.26,
+      "colorize": 0.0,
+      "branch_a": 12.3,
+      "branch_b": 0.26,
+      "fusion": 0.0,
+      "total": 12.31,
+      "images": 3
+    },
+    "cpu_threads": 4
+  },
+  "sr": {
+    "bicubic": {
+      "psnr": 43.02346584320068,
+      "ssim": 0.9659326940774917
+    },
+    "model": {
+      "psnr": 40.68665180206299,
+      "ssim": 0.9640140366554261
+    },
+    "weights": "SR/checkpoints/ssim_residual/edsr_ssim_residual_epoch_10.pth",
+    "crops": 100,
+    "crop": 192,
+    "scale": 2,
+    "val_flights": [
+      "F13",
+      "F14",
+      "F15",
+      "F16"
+    ]
+  }
+}
