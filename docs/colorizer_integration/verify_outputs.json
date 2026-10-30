@@ -1,0 +1,470 @@
+{
+ "thermovision": {
+  "models": {
+   "sr": "EDSR (SR/checkpoints/ssim_residual/edsr_ssim_residual_epoch_10.pth) x2",
+   "colorizer": "ThermoVision U-Net (checkpoints/colorizer/thermovision_exp7_last.pth, 256px)",
+   "detector": "YOLO (human_detection/runs/thermal/colab_resumed/weights/best.pt) imgsz=1024 conf=0.25 iou=0.5",
+   "pre_enhance": {
+    "enabled": true,
+    "clahe": true,
+    "clahe_clip": 2.0,
+    "clahe_tiles": 8,
+    "denoise": true,
+    "denoise_strength": 5
+   },
+   "notes": [
+    "detector is the FLIR street-scene model, not trained on POP drone views yet"
+   ]
+  },
+  "images": {
+   "FLIR_08935": {
+    "size": [
+     1280,
+     1024
+    ],
+    "people": 12,
+    "total_s": 9.655,
+    "colorize_s": 0.208,
+    "black": 0.000804901123046875,
+    "white": 0.0017730712890625,
+    "checker_ppm": 2.4579498767852783,
+    "checker_ppm_sr_input": 3.355314254760742,
+    "seam": null,
+    "mean_rgb": [
+     148.2,
+     150.1,
+     148.2
+    ],
+    "fused_matches_size": true,
+    "psnr": 13.4705810546875,
+    "swap_rb_psnr_change": -0.05564403533935547
+   },
+   "FLIR_09223": {
+    "size": [
+     1280,
+     1024
+    ],
+    "people": 2,
+    "total_s": 10.307,
+    "colorize_s": 0.314,
+    "black": 0.0,
+    "white": 0.000292205810546875,
+    "checker_ppm": 1.8280829191207886,
+    "checker_ppm_sr_input": 6.289134979248047,
+    "seam": null,
+    "mean_rgb": [
+     183.6,
+     188.3,
+     190.2
+    ],
+    "fused_matches_size": true,
+    "psnr": 17.673139572143555,
+    "swap_rb_psnr_change": -0.21017837524414062
+   },
+   "llvip_190580": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 2,
+    "total_s": 41.365,
+    "colorize_s": 0.598,
+    "black": 0.00025234222412109377,
+    "white": 0.0,
+    "checker_ppm": 0.4784388244152069,
+    "checker_ppm_sr_input": 0.09610820561647415,
+    "seam": 0.8834095001220703,
+    "mean_rgb": [
+     111.3,
+     110.6,
+     106.4
+    ],
+    "fused_matches_size": true,
+    "psnr": 9.766995429992676,
+    "swap_rb_psnr_change": -0.09525775909423828
+   },
+   "llvip_220151": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 0,
+    "total_s": 41.933,
+    "colorize_s": 0.557,
+    "black": 0.0,
+    "white": 0.0027690887451171874,
+    "checker_ppm": 0.7654496431350708,
+    "checker_ppm_sr_input": 0.18207690119743347,
+    "seam": 1.8567546606063843,
+    "mean_rgb": [
+     135.3,
+     136.6,
+     134.5
+    ],
+    "fused_matches_size": true,
+    "psnr": 8.870038032531738,
+    "swap_rb_psnr_change": -0.002872467041015625
+   },
+   "llvip_240457": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 1,
+    "total_s": 42.29,
+    "colorize_s": 0.579,
+    "black": 0.007522201538085938,
+    "white": 0.0002483367919921875,
+    "checker_ppm": 0.4417378604412079,
+    "checker_ppm_sr_input": 0.2500159740447998,
+    "seam": 1.8111969232559204,
+    "mean_rgb": [
+     120.4,
+     120.3,
+     116.5
+    ],
+    "fused_matches_size": true,
+    "psnr": 7.083302021026611,
+    "swap_rb_psnr_change": -0.0019021034240722656
+   },
+   "T1_0100_29.826": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 0,
+    "total_s": 41.81,
+    "colorize_s": 0.593,
+    "black": 0.0,
+    "white": 0.0,
+    "checker_ppm": 0.31269925832748413,
+    "checker_ppm_sr_input": 0.22563976049423218,
+    "seam": 1.1676990985870361,
+    "mean_rgb": [
+     137.9,
+     138.1,
+     134.2
+    ],
+    "fused_matches_size": true
+   },
+   "T1_0250_70.237": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 0,
+    "total_s": 41.716,
+    "colorize_s": 0.609,
+    "black": 7.62939453125e-07,
+    "white": 0.0,
+    "checker_ppm": 0.8593231439590454,
+    "checker_ppm_sr_input": 0.2850760519504547,
+    "seam": 1.3417543172836304,
+    "mean_rgb": [
+     133.7,
+     133.8,
+     129.6
+    ],
+    "fused_matches_size": true
+   },
+   "T2_0095_49.2": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 0,
+    "total_s": 41.893,
+    "colorize_s": 0.581,
+    "black": 0.0,
+    "white": 0.0,
+    "checker_ppm": 0.1535976380109787,
+    "checker_ppm_sr_input": 0.17217808961868286,
+    "seam": 1.0471749305725098,
+    "mean_rgb": [
+     136.2,
+     136.5,
+     132.6
+    ],
+    "fused_matches_size": true
+   },
+   "T2_0250_46.765": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 1,
+    "total_s": 42.202,
+    "colorize_s": 0.543,
+    "black": 0.0,
+    "white": 0.0,
+    "checker_ppm": 0.1828140914440155,
+    "checker_ppm_sr_input": 0.20701555907726288,
+    "seam": 1.3208727836608887,
+    "mean_rgb": [
+     126.4,
+     126.3,
+     122.5
+    ],
+    "fused_matches_size": true
+   },
+   "T3_0237_49.975": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 1,
+    "total_s": 41.626,
+    "colorize_s": 0.567,
+    "black": 0.0,
+    "white": 0.0,
+    "checker_ppm": 0.5321301817893982,
+    "checker_ppm_sr_input": 0.8538811206817627,
+    "seam": 1.073976755142212,
+    "mean_rgb": [
+     124.0,
+     123.9,
+     119.9
+    ],
+    "fused_matches_size": true
+   }
+  },
+  "mean_total_s": 35.479699999999994,
+  "mean_colorize_s": 0.5149
+ },
+ "infravision_tiny": {
+  "models": {
+   "sr": "EDSR (SR/checkpoints/ssim_residual/edsr_ssim_residual_epoch_10.pth) x2",
+   "colorizer": "InfraVision tiny colorizer (checkpoints/colorizer/infravision_tiny_75x3.pth)",
+   "detector": "YOLO (human_detection/runs/thermal/colab_resumed/weights/best.pt) imgsz=1024 conf=0.25 iou=0.5",
+   "pre_enhance": {
+    "enabled": true,
+    "clahe": true,
+    "clahe_clip": 2.0,
+    "clahe_tiles": 8,
+    "denoise": true,
+    "denoise_strength": 5
+   },
+   "notes": [
+    "detector is the FLIR street-scene model, not trained on POP drone views yet"
+   ]
+  },
+  "images": {
+   "FLIR_08935": {
+    "size": [
+     1280,
+     1024
+    ],
+    "people": 12,
+    "total_s": 12.709,
+    "colorize_s": 2.538,
+    "black": 0.00782012939453125,
+    "white": 0.0,
+    "checker_ppm": 1.6737269163131714,
+    "checker_ppm_sr_input": 3.355314254760742,
+    "seam": null,
+    "mean_rgb": [
+     33.9,
+     30.3,
+     18.5
+    ],
+    "fused_matches_size": true,
+    "psnr": 7.466803073883057,
+    "swap_rb_psnr_change": -0.003132343292236328
+   },
+   "FLIR_09223": {
+    "size": [
+     1280,
+     1024
+    ],
+    "people": 2,
+    "total_s": 13.169,
+    "colorize_s": 2.887,
+    "black": 0.000965118408203125,
+    "white": 0.0,
+    "checker_ppm": 5.10374116897583,
+    "checker_ppm_sr_input": 6.289134979248047,
+    "seam": null,
+    "mean_rgb": [
+     33.1,
+     29.7,
+     17.6
+    ],
+    "fused_matches_size": true,
+    "psnr": 3.2988529205322266,
+    "swap_rb_psnr_change": -0.0331873893737793
+   },
+   "llvip_190580": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 2,
+    "total_s": 45.231,
+    "colorize_s": 3.068,
+    "black": 0.0014598846435546875,
+    "white": 0.0,
+    "checker_ppm": 1.4431512355804443,
+    "checker_ppm_sr_input": 0.09610820561647415,
+    "seam": 1.1198681592941284,
+    "mean_rgb": [
+     32.8,
+     29.4,
+     17.4
+    ],
+    "fused_matches_size": true,
+    "psnr": 13.578470230102539,
+    "swap_rb_psnr_change": -0.6680965423583984
+   },
+   "llvip_220151": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 0,
+    "total_s": 44.342,
+    "colorize_s": 2.891,
+    "black": 0.010193634033203124,
+    "white": 0.0,
+    "checker_ppm": 0.35002899169921875,
+    "checker_ppm_sr_input": 0.18207690119743347,
+    "seam": 1.7005499601364136,
+    "mean_rgb": [
+     33.7,
+     30.7,
+     18.5
+    ],
+    "fused_matches_size": true,
+    "psnr": 10.593622207641602,
+    "swap_rb_psnr_change": -0.09000015258789062
+   },
+   "llvip_240457": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 1,
+    "total_s": 44.277,
+    "colorize_s": 3.03,
+    "black": 0.013803672790527344,
+    "white": 0.0,
+    "checker_ppm": 0.6240421533584595,
+    "checker_ppm_sr_input": 0.2500159740447998,
+    "seam": 1.6403752565383911,
+    "mean_rgb": [
+     34.5,
+     30.9,
+     18.9
+    ],
+    "fused_matches_size": true,
+    "psnr": 19.74082374572754,
+    "swap_rb_psnr_change": -0.23340606689453125
+   },
+   "T1_0100_29.826": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 0,
+    "total_s": 43.893,
+    "colorize_s": 2.849,
+    "black": 0.000154876708984375,
+    "white": 0.0,
+    "checker_ppm": 1.602457046508789,
+    "checker_ppm_sr_input": 0.22563976049423218,
+    "seam": 1.2220826148986816,
+    "mean_rgb": [
+     33.1,
+     29.8,
+     17.6
+    ],
+    "fused_matches_size": true
+   },
+   "T1_0250_70.237": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 0,
+    "total_s": 44.672,
+    "colorize_s": 2.954,
+    "black": 0.00019588470458984376,
+    "white": 0.0,
+    "checker_ppm": 1.7549006938934326,
+    "checker_ppm_sr_input": 0.2850760519504547,
+    "seam": 1.2124770879745483,
+    "mean_rgb": [
+     33.6,
+     30.2,
+     18.0
+    ],
+    "fused_matches_size": true
+   },
+   "T2_0095_49.2": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 0,
+    "total_s": 44.521,
+    "colorize_s": 2.972,
+    "black": 0.0011449813842773437,
+    "white": 0.0,
+    "checker_ppm": 0.9141701459884644,
+    "checker_ppm_sr_input": 0.17217808961868286,
+    "seam": 1.2268092632293701,
+    "mean_rgb": [
+     34.4,
+     31.1,
+     18.7
+    ],
+    "fused_matches_size": true
+   },
+   "T2_0250_46.765": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 1,
+    "total_s": 44.316,
+    "colorize_s": 2.928,
+    "black": 0.0011964797973632812,
+    "white": 0.0,
+    "checker_ppm": 1.180753231048584,
+    "checker_ppm_sr_input": 0.20701555907726288,
+    "seam": 1.281423568725586,
+    "mean_rgb": [
+     33.4,
+     30.2,
+     18.0
+    ],
+    "fused_matches_size": true
+   },
+   "T3_0237_49.975": {
+    "size": [
+     2560,
+     2048
+    ],
+    "people": 1,
+    "total_s": 43.897,
+    "colorize_s": 2.87,
+    "black": 0.00016632080078125,
+    "white": 0.0,
+    "checker_ppm": 1.3731553554534912,
+    "checker_ppm_sr_input": 0.8538811206817627,
+    "seam": 1.1835501194000244,
+    "mean_rgb": [
+     32.2,
+     28.9,
+     17.0
+    ],
+    "fused_matches_size": true
+   }
+  },
+  "mean_total_s": 38.1027,
+  "mean_colorize_s": 2.8987000000000003
+ },
+ "box_check": {
+  "boxes": 0,
+  "max_abs_error_px": 0.0
+ }
+}

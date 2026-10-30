@@ -57,6 +57,10 @@ def tiny_weights(tmp_path_factory):
     col = build_colorizer(8, 1)
     torch.save({"state_dict": col.state_dict(), "meta": dict(ngf=8, n_blocks=1)}, d / "colorizer_best.pth")
 
+    from infravision.models.thermovision_colorizer import ThermoVisionUNet, save_checkpoint
+
+    save_checkpoint(d / "thermovision.pth", ThermoVisionUNet().eval(), step=0, run_args={"name": "random_init"})
+
     from ultralytics import YOLO
 
     yolo = YOLO("yolo11n.yaml")   # built from the architecture file: no download
@@ -73,7 +77,8 @@ def tiny_cfg(tiny_weights):
     return load_config(overrides={
         "device": "cpu",
         "sr": {"weights": [str(w / "edsr_best.pth")], "scale": 2, "max_input_side": 96},
-        "colorizer": {"weights": [str(w / "colorizer_best.pth")], "work_side": 128},
+        "colorizer": {"backend": "thermovision", "checkpoint": str(w / "thermovision.pth"),
+                      "weights": [str(w / "colorizer_best.pth")], "work_side": 128},
         "detection": {"weights": [str(w / "yolo.pt")], "imgsz": 160, "conf": 0.25, "iou": 0.5},
     })
 

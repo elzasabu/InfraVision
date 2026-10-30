@@ -5,7 +5,7 @@ switched off from the config or tested on their own:
 
     pre_enhance(gray)              HxW   -> HxW     CLAHE + mild denoise
     SuperResolver(...)(gray)       HxW   -> sH x sW EDSR on a bicubic-upscaled frame
-    Colorizer(...)(gray)           HxW   -> HxWx3   thermal -> RGB generator
+    Colorizer(...)(gray)           HxW   -> HxWx3   thermal -> RGB (ThermoVision U-Net or tiny generator)
 """
 import importlib.util
 import sys
@@ -174,48 +174,99 @@ def colorize_tensor(model, gray, device):
     return y[0].permute(1, 2, 0).cpu().numpy().round().astype(np.uint8)
 
 
-class Colorizer:
-    """Thermal (1 channel) -> RGB (3 channels).
+BACKENDS = ("thermovision", "infravision_tiny")
 
-    The generator runs at `work_side` (longer side) and the colour is resized
-    to the SR frame; `detail` adds the SR frame's high-frequency detail back so
-    the super-resolution is not lost. Without weights, a false-colour map is
-    used and reported in `note`.
+
+def add_detail(rgb, gray, scale, amount):
+    """Add the high frequencies of `gray` that a model run at `scale` x the frame size cannot produce."""
+    if amount <= 0 or scale >= 1.0:
+        return rgb
+    g = gray.astype(np.float32)
+    hf = g - cv2.GaussianBlur(g, (0, 0), sigmaX=1.0 / scale)
+    return np.clip(rgb.astype(np.float32) + amount * hf[..., None], 0, 255).astype(np.uint8)
+
+
+class Colorizer:
+    """Thermal (1 channel) -> RGB (3 channels), with one of two backends:
+
+    thermovision      ThermoVision U-Net (infravision.colorizer.ColorizerAdapter):
+                      the whole frame at input_size x input_size, as it was trained,
+                      fed the raw thermal frame by default (`input: auto`)
+    infravision_tiny  the InfraVision ResnetGenerator at `work_side` (longer side),
+                      fed the CLAHE'd + SR frame it was trained on
+
+    The colour is resized to the SR frame; `detail` adds the SR frame's
+    high-frequency detail back so the super-resolution is not lost. Without
+    weights a false-colour map is used and the reason (with the fix) is in `note`.
     """
 
-    def __init__(self, weights=(), work_side=640, detail=0.5, fallback_colormap="inferno",
-                 device="auto", enabled=True, **_):
+    # The class keeps its old positional signature (weights first) and old default
+    # backend; the pipeline's default (thermovision) comes from the config.
+    def __init__(self, weights=(), work_side=640, detail=0.5, fallback_colormap="inferno", device="auto",
+                 enabled=True, backend="infravision_tiny", checkpoint=None, input_size=256, input="auto", **_):
+        if backend not in BACKENDS:
+            raise ValueError(f"colorizer.backend must be one of {BACKENDS}, got {backend!r}")
+        self.backend = backend
         self.enabled = enabled
         self.device = pick_device(device)
         self.work_side = int(work_side)
+        self.input_size = int(input_size)
         self.detail = float(detail)
+        self.input = ("raw" if backend == "thermovision" else "enhanced") if input in (None, "auto") else input
+        if self.input not in ("raw", "enhanced"):
+            raise ValueError(f"colorizer.input must be auto, raw or enhanced, got {input!r}")
         self.colormap = COLORMAPS.get(fallback_colormap, cv2.COLORMAP_INFERNO)
-        self.path = find_weights(weights) if enabled else None
-        self.model, self.meta = (load_colorizer(self.path, self.device) if self.path else (None, {}))
-        self.note = None
-        if enabled and self.model is None:
-            self.note = f"no colorizer weights found: showing a '{fallback_colormap}' false-colour map instead"
+        self.model, self.meta, self.adapter, self.path, self.note = None, {}, None, None, None
+        if not enabled:
+            return
+        if backend == "thermovision":
+            from .colorizer import ColorizerAdapter, missing_checkpoint_message
+
+            path = find_weights(checkpoint) if checkpoint else None
+            if path is None:
+                # Missing file: keep the demo usable, but say exactly what is missing and how to fix it.
+                self.note = (missing_checkpoint_message(checkpoint or "<colorizer.checkpoint not set>")
+                             + f"\n  Showing a '{fallback_colormap}' false-colour map instead.")
+                print("WARNING:", self.note)
+            else:
+                # A file that exists but does not load is an error, never a silent fallback.
+                self.adapter = ColorizerAdapter(path, self.device, self.input_size)
+                self.path, self.meta = self.adapter.path, self.adapter.info
+        else:
+            self.path = find_weights(weights)
+            if self.path:
+                self.model, self.meta = load_colorizer(self.path, self.device)
+            else:
+                self.note = f"no colorizer weights found: showing a '{fallback_colormap}' false-colour map instead"
 
     @property
     def name(self):
-        return f"colorizer ({short(self.path)})" if self.path else "false-colour map"
+        if self.adapter is not None:
+            return self.adapter.name
+        return f"InfraVision tiny colorizer ({short(self.path)})" if self.path else "false-colour map"
 
-    def __call__(self, gray):
+    def __call__(self, gray, source=None):
+        """gray: the (SR) frame that sets the output size and detail; source: what the model sees (default gray)."""
         if not self.enabled:
             return np.repeat(gray[..., None], 3, axis=2)
-        if self.model is None:
-            return cv2.cvtColor(cv2.applyColorMap(gray, self.colormap), cv2.COLOR_BGR2RGB)
+        src = gray if source is None else source
         h, w = gray.shape
+        if self.adapter is not None:
+            rgb = self.adapter.colorize(src, size=(w, h))
+            return add_detail(rgb, gray, self.adapter.input_size / max(h, w), self.detail)
+        if self.model is None:
+            if src.shape != gray.shape:
+                src = cv2.resize(src, (w, h), interpolation=cv2.INTER_CUBIC)
+            return cv2.cvtColor(cv2.applyColorMap(src, self.colormap), cv2.COLOR_BGR2RGB)
+        if src.shape != gray.shape:
+            src = cv2.resize(src, (w, h), interpolation=cv2.INTER_CUBIC)
         s = min(1.0, self.work_side / max(h, w)) if self.work_side > 0 else 1.0
-        small = gray if s == 1.0 else cv2.resize(gray, (max(4, round(w * s)), max(4, round(h * s))),
-                                                 interpolation=cv2.INTER_AREA)
+        small = src if s == 1.0 else cv2.resize(src, (max(4, round(w * s)), max(4, round(h * s))),
+                                                interpolation=cv2.INTER_AREA)
         rgb = colorize_tensor(self.model, small, self.device)
         if rgb.shape[:2] != (h, w):
             rgb = cv2.resize(rgb, (w, h), interpolation=cv2.INTER_CUBIC)
-            if self.detail > 0:
-                g = gray.astype(np.float32)
-                hf = g - cv2.GaussianBlur(g, (0, 0), sigmaX=1.0 / s)
-                rgb = np.clip(rgb.astype(np.float32) + self.detail * hf[..., None], 0, 255).astype(np.uint8)
+            rgb = add_detail(rgb, gray, s, self.detail)
         return rgb
 
 
@@ -228,7 +279,11 @@ class Enhancer:
         dev = cfg.get("device", "auto")
         self.pre_cfg = cfg["pre_enhance"]
         self.sr = SuperResolver(device=dev, **cfg["sr"])
-        self.colorizer = Colorizer(device=dev, **cfg["colorizer"])
+        col = dict(cfg["colorizer"])
+        # colorizer.device: auto (or unset) follows the pipeline device; cpu/cuda overrides it.
+        if col.get("device") in (None, "", "auto"):
+            col["device"] = dev
+        self.colorizer = Colorizer(**col)
 
     @property
     def notes(self):
@@ -245,7 +300,9 @@ class Enhancer:
         sr = self.sr(pre)
         t["super_resolution"] = time.perf_counter() - t0
         t0 = time.perf_counter()
-        rgb = self.colorizer(sr)
+        # input: raw -> the model sees the original frame (ThermoVision was trained on raw previews),
+        # but the colour is produced at the SR size and gets the SR detail added back.
+        rgb = self.colorizer(sr, source=gray if self.colorizer.input == "raw" else None)
         t["colorize"] = time.perf_counter() - t0
         if timings is not None:
             timings.update(t)

@@ -1,0 +1,56 @@
+{
+ "FLIR_08935.jpeg": {
+  "count": 12,
+  "input_size": [
+   640,
+   512
+  ],
+  "output_size": [
+   1280,
+   1024
+  ],
+  "max_abs_error_px": 0.0,
+  "fused_shape": [
+   1024,
+   1280,
+   3
+  ],
+  "colorizer": "ThermoVision U-Net (checkpoints/colorizer/thermovision_exp7_last.pth, 256px)"
+ },
+ "llvip_190580.png": {
+  "count": 2,
+  "input_size": [
+   1280,
+   1024
+  ],
+  "output_size": [
+   2560,
+   2048
+  ],
+  "max_abs_error_px": 0.0,
+  "fused_shape": [
+   2048,
+   2560,
+   3
+  ],
+  "colorizer": "ThermoVision U-Net (checkpoints/colorizer/thermovision_exp7_last.pth, 256px)"
+ },
+ "T3_0237_49.975.JPG": {
+  "count": 1,
+  "input_size": [
+   1280,
+   1024
+  ],
+  "output_size": [
+   2560,
+   2048
+  ],
+  "max_abs_error_px": 0.0,
+  "fused_shape": [
+   2048,
+   2560,
+   3
+  ],
+  "colorizer": "ThermoVision U-Net (checkpoints/colorizer/thermovision_exp7_last.pth, 256px)"
+ }
+}

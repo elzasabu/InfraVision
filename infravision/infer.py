@@ -2,6 +2,7 @@
 
     python -m infravision.infer --input POP/test/JPEGImages --out outputs/pop_test
     python -m infravision.infer --input frame.png --out outputs/ --all --device cpu
+    python -m infravision.infer --input POP/test/JPEGImages --out outputs/tiny --colorizer infravision_tiny
 
 Writes, per image, <name>_fused.png (colorized + boxes + people count) and,
 with --all, <name>_enhanced.png and <name>_sr.png. Also writes
@@ -24,6 +25,10 @@ def main(argv=None):
     p.add_argument("--config", default=None, help="YAML config (default configs/infravision.yaml)")
     p.add_argument("--device", default=None, help="auto | cpu | cuda (overrides the config)")
     p.add_argument("--scale", type=int, default=None, help="SR scale (overrides the config)")
+    p.add_argument("--colorizer", default=None, choices=["thermovision", "infravision_tiny"],
+                   help="colorizer backend (overrides colorizer.backend in the config)")
+    p.add_argument("--colorizer-checkpoint", default=None,
+                   help="ThermoVision checkpoint (overrides colorizer.checkpoint)")
     p.add_argument("--limit", type=int, default=0, help="only the first N images")
     p.add_argument("--all", action="store_true", help="also save the enhanced and SR images")
     p.add_argument("--sequential", action="store_true", help="run the two branches one after the other")
@@ -46,6 +51,9 @@ def main(argv=None):
         over["device"] = args.device
     if args.scale:
         over["sr"] = {"scale": args.scale}
+    if args.colorizer or args.colorizer_checkpoint:
+        over["colorizer"] = {k: v for k, v in (("backend", args.colorizer),
+                                               ("checkpoint", args.colorizer_checkpoint)) if v}
     from .pipeline import Pipeline
 
     pipe = Pipeline(args.config, over)
@@ -75,6 +83,7 @@ def main(argv=None):
         t = {k: round(v, 3) for k, v in r["timings"].items()}
         results.append(dict(file=str(f), people=d["count"], output_size=d["output_size"],
                             input_size=d["input_size"], boxes=d["boxes"].round(1).tolist(),
+                            boxes_input=d["boxes_input"].round(1).tolist(),
                             scores=d["scores"].round(3).tolist(), timings=t, notes=r["notes"]))
         print(f"[{i}/{len(files)}] {f.name}: {d['count']} people, {t['total']:.2f}s "
               f"(A {t['branch_a']:.2f}s | B {t['branch_b']:.2f}s)", flush=True)
