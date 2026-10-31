@@ -62,12 +62,19 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   2. New notebook → File → Import Notebook → `colab_training/train_sr_kaggle.ipynb`. Add Input → that dataset. GPU T4, Internet on.
   3. Save Version → Save & Run All (Commit).
   4. Output tab → `edsr_pop.zip` → copy `edsr_best.pth` to `InfraVision/checkpoints/sr/edsr_best.pth`. The last cell says whether it beats bicubic. If it doesn't, set `sr.backend: bicubic`.
+- [ ] **U7: disaster datasets** (replaces U3)
+  - HIT-UAV (thermal drone, person boxes, CC BY 4.0): `git clone https://github.com/suojiashun/HIT-UAV-Infrared-Thermal-Dataset` into `datasets/HIT-UAV/`.
+  - WiSARD (wilderness SAR, thermal + RGB, MIT-style licence), from sites.google.com/uw.edu/wisard: first the **971.6 MB Multi Modal Sample** into `datasets/WiSARD/`. Only get the 40.5 GB full set if the sample shows a clear gain.
+  - Then hand C8 to Claude.
+- [ ] **U8: real flood test frames** (optional, later)
+  - 50–100 thermal drone frames of people in water (news / rescue footage) in `datasets/flood_real/`. Claude pre-labels them with YOLO; you only fix the boxes (CVAT or Roboflow).
 - [ ] **U4: push when asked:** `git push -u origin feature/rev1` (from `InfraVision/`).
 
 ## Claude tasks
 
 - [x] **C0: Phase 0.** FP16 autocast, `scripts/benchmark_baseline.py`, merged the ThermoVision branch, dataset paths in config, POP → YOLO zip for Kaggle.
-- [ ] **C1: flood-occlusion augmentation** (RUN_ORDER 2.2)
+- [x] **C1: flood-occlusion augmentation** (RUN_ORDER 2.2)
+  - Done 2026-10-31: `scripts/prepare_flood_aug.py` adds 1664 `flood_*` train copies (30%) and a 900-frame `test_flood` split + `data_flood.yaml`. Water level is taken from the ground around each person, as a soft blob with a wavy edge. Grid at `results/flood_aug_grid.jpg`. `make_pop_zip.py` includes them (zip now 1.01 GB). Used from the next YOLO run (the running U1 uses the old zip).
   - `scripts/prepare_flood_aug.py`: offline copies of ~30% of POP train frames.
   - In each copy, the lower 30–60% of every person box is filled with cool, water-like intensity plus ripple noise. Labels stay unchanged.
   - Add the copies to `human_detection/datasets/pop`, rebuild the zip, and build a flood-occluded test set from POP test.
@@ -91,6 +98,9 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
 - [ ] **C6: detection evaluation** (needs U1)
   - Sweep imgsz, tiling (`detection.tile`) and TTA on POP val, then pick the best.
   - Report test-set P / R / mAP@0.5 to `results/detection_upgrade.json` and update `docs/RESULTS.md`.
+- [ ] **C8: disaster datasets → YOLO + eval** (needs U7)
+  - Converters for HIT-UAV and WiSARD into YOLO format (person only, full resolution), plus WiSARD thermal/RGB pairs for the colorizer.
+  - Evaluate the POP YOLO on POP test, `test_flood`, HIT-UAV and WiSARD → `results/disaster_eval.json`. Then a combined Kaggle fine-tune.
 - [ ] **C7: dashboard** (RUN_ORDER 4)
   - Extend `app.py`: 4-stage view, conf / tiling / hotspot sliders, SR selector, victim count, per-branch ms, export.
   - Check it with the Playwright MCP.

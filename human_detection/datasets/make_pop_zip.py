@@ -2,6 +2,8 @@
 
 Zip layout:
   pop/data.yaml, pop/images/{train,val,test}, pop/labels/{train,val,test}
+  pop/data_flood.yaml, pop/{images,labels}/test_flood   (if prepare_flood_aug.py ran;
+                                                         its flood_* train copies sit in train/)
   weights/thermal_best.pt   (optional FLIR thermal model to start from)
 
 Usage:
@@ -35,7 +37,11 @@ data_yaml = "path: /content/pop\ntrain: images/train\nval: images/val\ntest: ima
 # JPEGs are already compressed, so store them as-is (much faster).
 with zipfile.ZipFile(OUT, "w", zipfile.ZIP_STORED) as z:
     z.writestr("pop/data.yaml", data_yaml)
-    for split in ("train", "val", "test"):
+    splits = ["train", "val", "test"]
+    if (POP / "images" / "test_flood").is_dir():
+        z.writestr("pop/data_flood.yaml", data_yaml.replace("test: images/test", "test: images/test_flood"))
+        splits.append("test_flood")
+    for split in splits:
         for kind in ("images", "labels"):
             files = sorted((POP / kind / split).iterdir())
             for f in files:
