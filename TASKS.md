@@ -63,6 +63,7 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   4. Output tab → `colorizer_llvip.zip` → copy `thermovision_best.pth` to `InfraVision/checkpoints/colorizer/thermovision_llvip_v1.pth`.
 - [ ] **U6: train EDSR on Kaggle** (third account is fine)
   - Run 1 (2026-10-31) failed: stuck at 5.6 dB for all 30 epochs (outputs went all-white; the [0,1] clamp killed the gradient). Fixed in the training code; **re-run without attaching the old output** (it would resume the broken `last.pth`).
+  - Run 2 (2026-10-31, fixed code) failed: all weights NaN from epoch 1 under fp16. Now trains in fp32 (no `--amp`, loss always fp32), ~2–3 h. Re-import the notebook.
   1. Upload `datasets/pop_raw.zip` (673 MB, original POP layout) as a private Kaggle dataset.
   2. New notebook → File → Import Notebook → `colab_training/train_sr_kaggle.ipynb`. Add Input → that dataset. GPU T4, Internet on.
   3. Save Version → Save & Run All (Commit).

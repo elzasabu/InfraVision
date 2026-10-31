@@ -83,9 +83,10 @@ def main(argv=None):
             x, y = x.to(device), y.to(device)
             with autocast(device, amp):
                 pred = model(x)
-                loss = F.l1_loss(pred, y)
-                if args.ssim_weight:
-                    loss = loss + args.ssim_weight * (1 - ssim(pred, y))
+            pred = pred.float()   # loss in fp32: SSIM's variances cancel badly in fp16
+            loss = F.l1_loss(pred, y)
+            if args.ssim_weight:
+                loss = loss + args.ssim_weight * (1 - ssim(pred, y))
             opt.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
             scaler.step(opt)
