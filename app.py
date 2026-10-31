@@ -19,7 +19,7 @@ from infravision.config import ROOT, load_config, merge
 from infravision.io import ThermalImageError, list_images, read_rgb, save_rgb
 from infravision.pipeline import Pipeline
 
-POP_TEST = ROOT / "POP" / "test" / "JPEGImages"
+POP_TEST = POP_ROOT / "test" / "JPEGImages"
 POP_YOLO_TEST = ROOT / "human_detection" / "datasets" / "pop" / "images" / "test"
 PAIRED = ROOT / "data" / "paired_disaster"
 MAX_EXAMPLES = 200

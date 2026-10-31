@@ -5,6 +5,12 @@
 
 device: auto            # auto | cpu | cuda | cuda:0
 
+# Dataset folders: first existing one wins (repo-local POP/ or a shared ../datasets/).
+datasets:
+  pop:
+    - POP
+    - ../datasets/POP
+
 # Branch A step 1: classic enhancement before super-resolution.
 pre_enhance:
   enabled: true

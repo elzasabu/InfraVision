@@ -24,10 +24,10 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from ..config import ROOT
+from ..config import ROOT, find_dir, load_config
 from ..io import read_thermal
 
-POP_ROOT = ROOT / "POP"
+POP_ROOT = find_dir(load_config()["datasets"]["pop"]) or ROOT / "POP"
 SPLITS = ("train", "val", "test")
 _FLIGHT = re.compile(r"^([A-Za-z]+\d+)_")
 

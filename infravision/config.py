@@ -10,6 +10,7 @@ DEFAULT_CONFIG = ROOT / "configs" / "infravision.yaml"
 
 DEFAULTS = {
     "device": "auto",
+    "datasets": {"pop": ["POP", "../datasets/POP"]},
     "pre_enhance": {"enabled": True, "clahe": True, "clahe_clip": 2.0, "clahe_tiles": 8,
                     "denoise": True, "denoise_strength": 5},
     "sr": {"enabled": True, "scale": 2, "max_input_side": 1280, "weights": []},
@@ -59,6 +60,15 @@ def load_config(path=None, overrides=None):
 def resolve(path):
     p = Path(path)
     return p if p.is_absolute() else ROOT / p
+
+
+def find_dir(candidates):
+    """First existing folder in a list of candidate paths, or None."""
+    for c in [candidates] if isinstance(candidates, (str, Path)) else candidates:
+        p = resolve(c)
+        if p.is_dir():
+            return p
+    return None
 
 
 def find_weights(candidates):

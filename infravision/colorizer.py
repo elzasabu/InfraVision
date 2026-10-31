@@ -194,7 +194,8 @@ class ColorizerAdapter:
         self.model.eval()
         for i in range(0, len(grays), batch_size):
             x = torch.from_numpy(np.stack([self._input(g) for g in grays[i:i + batch_size]]))[:, None]
-            with torch.inference_mode():
+            with torch.inference_mode(), torch.autocast(self.device.type, dtype=torch.float16,
+                                                        enabled=self.device.type == "cuda"):
                 y = self.model(x.to(self.device)).float().clamp_(0, 1).permute(0, 2, 3, 1).cpu().numpy()
             out += [self._output(np.ascontiguousarray(yi), sz) for yi, sz in zip(y, sizes[i:i + batch_size])]
         return out
