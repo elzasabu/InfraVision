@@ -55,7 +55,11 @@ def main(argv=None):
                     persistent_workers=args.workers > 0)
     vl = DataLoader(val_ds, args.batch, shuffle=False, num_workers=args.workers)
 
-    model = build_edsr(1, args.channels, args.blocks, global_residual=True).to(device)
+    model = build_edsr(1, args.channels, args.blocks, global_residual=True)
+    # Start as the identity (output = bicubic input): a random tail pushes pixels past [0, 1].
+    torch.nn.init.zeros_(model.tail.weight)
+    torch.nn.init.zeros_(model.tail.bias)
+    model = model.to(device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(1, args.epochs))
     scaler = torch.amp.GradScaler(device.type, enabled=amp)
@@ -71,6 +75,7 @@ def main(argv=None):
 
     for epoch in range(resumer.start_epoch(), args.epochs + 1):
         model.train()
+        model.clamp_output = False   # clamped pixels get no gradient; the loss sees the raw output
         tot = n = 0
         for x, y in tl:
             x, y = x.to(device), y.to(device)
@@ -87,6 +92,7 @@ def main(argv=None):
         sched.step()
 
         model.eval()
+        model.clamp_output = True
         ps, ss = [], []
         with torch.no_grad():
             for x, y in vl:

@@ -63,6 +63,9 @@ class EDSR(nn.Module):
         #          (older checkpoints: edsr_epoch_*.pth, edsr_model*.pth)
         self.global_residual = global_residual
 
+        # Clamp the output to [0, 1]. Training turns this off: a clamped pixel gets no gradient.
+        self.clamp_output = True
+
         # ----------------------------------------------------
         # Head
         # ----------------------------------------------------
@@ -157,10 +160,11 @@ class EDSR(nn.Module):
 
         # Keep RGB values between 0 and 1
 
-        output = torch.clamp(
-            output,
-            0.0,
-            1.0
-        )
+        if self.clamp_output:
+            output = torch.clamp(
+                output,
+                0.0,
+                1.0
+            )
 
         return output
