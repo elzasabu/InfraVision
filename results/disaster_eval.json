@@ -1,0 +1,11 @@
+{
+  "model": "checkpoints/yolo/best.pt (POP fine-tune, U1)",
+  "date": "2026-11-01",
+  "pop_test": {"P": 0.768, "R": 0.572, "mAP50": 0.630, "source": "results/detection_upgrade.json"},
+  "wisard_ir_sample": {
+    "data": "WiSARD Multi Modal Sample, 210417_MtErie_Enterprise_IR_0004 (264 frames, 640x512, one flight, 2027 person boxes)",
+    "imgsz_640": {"P": 0.613, "R": 0.486, "mAP50": 0.435, "mAP50_95": 0.115},
+    "imgsz_1024": {"P": 0.578, "R": 0.456, "mAP50": 0.411, "mAP50_95": 0.111},
+    "note": "One flight only, so indicative. Low mAP50-95 also suggests WiSARD boxes are drawn differently from POP's."
+  }
+}
