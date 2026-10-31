@@ -2,11 +2,13 @@
 import json
 import os
 import shutil
+import sys
 from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-POP = ROOT / "POP"
+sys.path.insert(0, str(ROOT))
+from infravision.data.pop import POP_ROOT as POP  # noqa: E402  (configs/infravision.yaml datasets.pop)
 OUT = Path(__file__).resolve().parent / "pop"
 
 for split in ("train", "val", "test"):
