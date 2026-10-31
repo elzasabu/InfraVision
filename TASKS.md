@@ -29,12 +29,13 @@ Owner **U** = the user (accounts, downloads, uploads, pushing). Owner **C** = Cl
   3. Import `colab_training/train_pop_yolo_kaggle.ipynb`, Add Input → that dataset, Accelerator → GPU, Run All.
   4. Download `pop_1024.zip` from the Output tab. Copy `weights/best.pt` into `InfraVision/checkpoints/yolo/best.pt`.
   - Done when: `checkpoints/yolo/best.pt` exists. Then hand C6 to Claude.
-- [ ] **U2: get the full LLVIP dataset**
+- [x] **U2: get the full LLVIP dataset**
+  - Done 2026-10-31: 12025 train / 3463 test pairs at `datasets/LLVIP`.
   - The current copy has an empty `infrared/` folder and only 9251 of 12025 visible train images.
   - Get it from the official repo, github.com/bupt-ai-cz/LLVIP (download links are in its README).
   - Put it at `datasets/LLVIP/{infrared,visible}/{train,test}`.
   - Done when: `infrared/train` and `visible/train` have the same file count (~12k), and the test folders have ~3.4k each.
-- [ ] **U3: (after U2) download aerial thermal+RGB pairs**
+- [ ] **U3: (optional, only if C5 colours look wrong on POP) download aerial thermal+RGB pairs**
   - WiSARD: sites.google.com/uw.edu/wisard
   - NII-CU MAPD: www.nii-cu-multispectral.org
   - Check each licence. Put them at `datasets/WiSARD/`, `datasets/NII-CU/`, then tell Claude the folder layout.
