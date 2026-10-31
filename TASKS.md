@@ -29,7 +29,7 @@ All training runs on Kaggle (free GPU, about 30 GPU hours a week **per account**
 | Model | Job in the pipeline | Trains on | Notebook / task | Before | Target |
 |---|---|---|---|---|---|
 | YOLO11s | finds people (Branch B) | POP (drone thermal, person boxes) | `colab_training/train_pop_yolo_kaggle.ipynb` (U1) | 0.037 mAP@0.5 (FLIR street model) | > 0.65 mAP@0.5 on POP test |
-| EDSR x2 | sharpens the thermal frame (Branch A) | POP crops | C3 (notebook still to be written) | old checkpoint 40.69 dB, worse than bicubic's 43.02 dB | beat bicubic PSNR/SSIM on POP val |
+| EDSR x2 | sharpens the thermal frame (Branch A) | POP crops | `colab_training/train_sr_kaggle.ipynb` (U6) | old checkpoint 40.69 dB, worse than bicubic's 43.02 dB | beat bicubic PSNR/SSIM on POP val |
 | ThermoVision U-Net | thermal → colour (Branch A) | LLVIP pairs (later maybe WiSARD / NII-CU) | `colab_training/train_colorizer_kaggle.ipynb` (U5) | false-colour map: 9.06 dB PSNR, 0.21 SSIM | well above the baselines; saturation > 0.18 after C4 |
 
 The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` after each run.
@@ -57,6 +57,11 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   2. New notebook → File → Import Notebook → `colab_training/train_colorizer_kaggle.ipynb`. Add Input → that dataset. GPU T4, Internet on.
   3. Save Version → Save & Run All (Commit).
   4. Output tab → `colorizer_llvip.zip` → copy `thermovision_best.pth` to `InfraVision/checkpoints/colorizer/thermovision_llvip_v1.pth`.
+- [ ] **U6: train EDSR on Kaggle** (third account is fine)
+  1. Upload `datasets/pop_raw.zip` (673 MB, original POP layout) as a private Kaggle dataset.
+  2. New notebook → File → Import Notebook → `colab_training/train_sr_kaggle.ipynb`. Add Input → that dataset. GPU T4, Internet on.
+  3. Save Version → Save & Run All (Commit).
+  4. Output tab → `edsr_pop.zip` → copy `edsr_best.pth` to `InfraVision/checkpoints/sr/edsr_best.pth`. The last cell says whether it beats bicubic. If it doesn't, set `sr.backend: bicubic`.
 - [ ] **U4: push when asked:** `git push -u origin feature/rev1` (from `InfraVision/`).
 
 ## Claude tasks
@@ -72,7 +77,8 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   - New order: `cv2.bilateralFilter` → SR → CLAHE (clip 1.5, 8×8) after SR.
   - Config switch `sr.backend: bicubic | edsr`.
   - Removes the 2.5 s NLMeans step. Tests pass. Update the defaults in `configs/infravision.yaml`.
-- [ ] **C3: prepare EDSR training on POP** (RUN_ORDER 1.3)
+- [x] **C3: prepare EDSR training on POP** (RUN_ORDER 1.3)
+  - Done 2026-10-31: the existing `infravision/train/sr.py` is kept as is (L1 + 0.2·(1−SSIM), Adam 2e-4, cosine, 30 epochs, batch 16; a 2-epoch CPU test already matched bicubic). Added `colab_training/train_sr_kaggle.ipynb` and `datasets/pop_raw.zip`. Smoke-tested from the extracted zip; the checkpoint loads in the pipeline. Training itself = U6.
   - Check `infravision/train/sr.py` against the recipe: 25 epochs, batch 16, AdamW 1e-4, cosine schedule, loss 0.9·L1 + 0.1·(1−SSIM).
   - Make a Kaggle notebook plus a data zip. Smoke-run 1 epoch on CPU.
   - Then **U** runs it on Kaggle. Gate: beats bicubic on POP val (`python -m infravision.evaluate --skip colorizer grid timing`).
