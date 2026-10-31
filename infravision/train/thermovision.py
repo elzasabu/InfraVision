@@ -11,18 +11,20 @@ Model contract (infravision/models/thermovision_colorizer.py): the whole raw
 thermal frame resized to size x size, [0, 1] in; sigmoid RGB [0, 1] out.
 Loss = L1 + edge (Sobel on luma) + VGG16 perceptual + chroma (L1 on Cb/Cr,
 against the washed-out colour of a plain L1 regression). The encoder starts
-from ImageNet ResNet34 (conv1 summed to one channel); its BatchNorm stays frozen.
+from ImageNet ResNet34 (conv1 summed to one channel); its BatchNorm adapts to thermal
+images (frozen ImageNet statistics include near-zero variances that blow small weight
+changes up past the fp16 range).
 Writes <out>/thermovision_best.pth (loadable by infravision.colorizer) and
 metrics.json; val saturation is logged next to PSNR / SSIM.
 """
 import argparse
+import math
 import random
 from pathlib import Path
 
 import cv2
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from torchvision.utils import save_image
@@ -32,7 +34,7 @@ from ..io import IMAGE_EXTS
 from ..metrics import psnr, ssim
 from ..models.thermovision_colorizer import ThermoVisionUNet
 from .colorizer import VGGPerceptual
-from .common import CHECKPOINTS, BestKeeper, Resumer, add_common_args, autocast, setup
+from .common import CHECKPOINTS, BestKeeper, LossWatch, Resumer, add_common_args, autocast, fail, setup
 
 
 def llvip_pairs(root, split):
@@ -92,12 +94,6 @@ def build_model(pretrained=True):
         except Exception as e:  # no internet
             print(f"WARNING: ImageNet ResNet34 weights unavailable ({e.__class__.__name__}); encoder from scratch")
     return m
-
-
-def freeze_encoder_bn(m):
-    for mod in m.encoder.modules():
-        if isinstance(mod, nn.BatchNorm2d):
-            mod.eval()
 
 
 def luma(x):
@@ -175,9 +171,9 @@ def main(argv=None):
     keeper = BestKeeper(out, "thermovision", "val_psnr", meta)
     resumer = Resumer(out, keeper, args.resume, G=G, opt=opt, sched=sched, scaler=scaler)
 
+    watch = LossWatch()
     for epoch in range(resumer.start_epoch(), args.epochs + 1):
         G.train()
-        freeze_encoder_bn(G)
         tot = n = 0
         for step, (t, v) in enumerate(tl, 1):
             t, v = t.to(device, non_blocking=True), v.to(device, non_blocking=True)
@@ -193,6 +189,7 @@ def main(argv=None):
             scaler.scale(loss).backward()
             scaler.step(opt)
             scaler.update()
+            watch(loss.item())
             tot, n = tot + loss.item(), n + 1
             if step % 100 == 0:
                 print(f"  epoch {epoch} step {step}/{len(tl)} loss {tot / n:.4f}", flush=True)
@@ -201,7 +198,7 @@ def main(argv=None):
         sched.step()
 
         G.eval()
-        ps, ss, sat, sat_t = [], [], [], []
+        ps, ss, sat, sat_t, con, con_t = [], [], [], [], [], []
         with torch.inference_mode():
             for i, (t, v) in enumerate(vl):
                 with autocast(device, amp):
@@ -211,15 +208,24 @@ def main(argv=None):
                 ss.append(ssim(pred, v))
                 sat.append(saturation(pred))
                 sat_t.append(saturation(v))
+                con.append(luma(pred).flatten(1).std(1))
+                con_t.append(luma(v).flatten(1).std(1))
                 if i == 0:
                     save_image(torch.cat([t.repeat(1, 3, 1, 1), pred, v]), out / f"val_samples_epoch{epoch:03d}.png",
                                nrow=t.shape[0])
         m = dict(train_loss=tot / max(n, 1), val_psnr=torch.stack(ps).mean().item(),
                  val_ssim=torch.stack(ss).mean().item(), val_saturation=torch.stack(sat).mean().item(),
-                 target_saturation=torch.stack(sat_t).mean().item())
+                 target_saturation=torch.stack(sat_t).mean().item(),
+                 contrast_ratio=(torch.cat(con).mean() / torch.cat(con_t).mean().clamp_min(1e-6)).item())
+        if not math.isfinite(m["val_psnr"]):   # the model is poisoned; more epochs cannot fix it
+            fail(f"epoch {epoch}: val PSNR is NaN/inf ({m})")
+        # A flat, average-colour output (run 1) has ~0.17 of the photo's contrast; a learning model is past 0.5.
+        if epoch >= 2 and m["contrast_ratio"] < 0.3 and not args.smoke:   # smoke = 3 steps on noise
+            fail(f"epoch {epoch}: output is nearly flat (contrast ratio {m['contrast_ratio']:.2f} < 0.3)")
         best = keeper.update(epoch, G.state_dict(), m, {k: str(v) for k, v in vars(args).items()})
         print(f"epoch {epoch}/{args.epochs} loss {m['train_loss']:.4f} val PSNR {m['val_psnr']:.2f} dB "
-              f"SSIM {m['val_ssim']:.4f} saturation {m['val_saturation']:.3f} (real {m['target_saturation']:.3f})"
+              f"SSIM {m['val_ssim']:.4f} saturation {m['val_saturation']:.3f} (real {m['target_saturation']:.3f}) "
+              f"contrast {m['contrast_ratio']:.2f}"
               + ("  *best*" if best else ""), flush=True)
         resumer.end_epoch(epoch, args.epochs)
     resumer.finish()

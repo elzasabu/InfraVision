@@ -1,5 +1,6 @@
 """Shared bits for the training scripts: device/AMP setup, best-checkpoint saving."""
 import json
+import math
 import os
 import time
 from pathlib import Path
@@ -77,6 +78,23 @@ def atomic_torch_save(obj, path):
     tmp = path.with_name(path.name + ".tmp")
     torch.save(obj, tmp)
     os.replace(tmp, path)
+
+
+def fail(msg):
+    """Stop a broken run now instead of after hours of Kaggle GPU time."""
+    raise SystemExit(f"HEALTH CHECK FAILED: {msg}")
+
+
+class LossWatch:
+    """Stops training after `limit` NaN/inf losses in a row (a few are normal with AMP)."""
+
+    def __init__(self, limit=20):
+        self.limit, self.bad = limit, 0
+
+    def __call__(self, loss):
+        self.bad = 0 if math.isfinite(loss) else self.bad + 1
+        if self.bad >= self.limit:
+            fail(f"{self.bad} training steps in a row gave a NaN/inf loss")
 
 
 class Resumer:

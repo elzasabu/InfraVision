@@ -10,6 +10,7 @@ flights, so no flight is in both. Writes checkpoints/sr/edsr_best.pth and
 checkpoints/sr/metrics.json, which the pipeline loads first.
 """
 import argparse
+import math
 
 import torch
 import torch.nn.functional as F
@@ -18,7 +19,7 @@ from torch.utils.data import DataLoader, Subset
 from ..data.pop import POP_ROOT, POPSRCrops, pop_splits
 from ..enhance import build_edsr
 from ..metrics import psnr, ssim
-from .common import CHECKPOINTS, BestKeeper, Resumer, add_common_args, autocast, setup
+from .common import CHECKPOINTS, BestKeeper, LossWatch, Resumer, add_common_args, autocast, fail, setup
 
 
 def main(argv=None):
@@ -72,6 +73,7 @@ def main(argv=None):
     with torch.no_grad():
         b_psnr = torch.stack([psnr(x, y) for x, y in vl]).mean().item()
     print(f"val PSNR of bicubic input: {b_psnr:.2f} dB")
+    watch = LossWatch()
 
     for epoch in range(resumer.start_epoch(), args.epochs + 1):
         model.train()
@@ -88,6 +90,7 @@ def main(argv=None):
             scaler.scale(loss).backward()
             scaler.step(opt)
             scaler.update()
+            watch(loss.item())
             tot, n = tot + loss.item(), n + 1
         sched.step()
 
@@ -101,6 +104,9 @@ def main(argv=None):
                 ss.append(ssim(pred, y))
         m = dict(train_loss=tot / max(n, 1), val_psnr=torch.stack(ps).mean().item(),
                  val_ssim=torch.stack(ss).mean().item(), val_psnr_bicubic=b_psnr)
+        # The model starts equal to bicubic, so a working run never falls far below it.
+        if not math.isfinite(m["val_psnr"]) or m["val_psnr"] < b_psnr - 3:
+            fail(f"epoch {epoch}: val PSNR {m['val_psnr']:.2f} dB, bicubic {b_psnr:.2f} dB")
         best = keeper.update(epoch, model.state_dict(), m, vars(args))
         print(f"epoch {epoch}/{args.epochs} loss {m['train_loss']:.4f} val PSNR {m['val_psnr']:.2f} dB "
               f"SSIM {m['val_ssim']:.4f}" + ("  *best*" if best else ""), flush=True)

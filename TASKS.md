@@ -36,6 +36,9 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
 
 ## User tasks
 
+**Every training run now stops itself early if it is broken** (NaN loss, EDSR more than 3 dB below bicubic, colorizer output flat, YOLO mAP50 < 0.05 at epoch 5). A run that fails in the first minutes with `HEALTH CHECK FAILED` means: send Claude the log.
+
+
 - [ ] **U1: train YOLO on Kaggle**
   1. Kaggle account: Settings → Phone verification.
   2. Datasets → New Dataset: upload `InfraVision/human_detection/pop_yolo_colab.zip` (private).
@@ -53,6 +56,7 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   - NII-CU MAPD: www.nii-cu-multispectral.org
   - Check each licence. Put them at `datasets/WiSARD/`, `datasets/NII-CU/`, then tell Claude the folder layout.
 - [ ] **U5: train the colorizer on Kaggle** (teammate account is fine)
+  - Run 1 (2026-10-31) failed: NaN from epoch 1 (frozen ImageNet BatchNorm blew activations past fp16), output a flat brown fill. Fixed; **re-run without attaching the old output**.
   1. Upload `datasets/llvip_colorizer.zip` as a private Kaggle dataset.
   2. New notebook → File → Import Notebook → `colab_training/train_colorizer_kaggle.ipynb`. Add Input → that dataset. GPU T4, Internet on.
   3. Save Version → Save & Run All (Commit).
