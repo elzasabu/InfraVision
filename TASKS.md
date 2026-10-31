@@ -39,12 +39,13 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
 **Every training run now stops itself early if it is broken** (NaN loss, EDSR more than 3 dB below bicubic, colorizer output flat, YOLO mAP50 < 0.05 at epoch 5). A run that fails in the first minutes with `HEALTH CHECK FAILED` means: send Claude the log.
 
 
-- [ ] **U1: train YOLO on Kaggle**
+- [x] **U1: train YOLO on Kaggle**
   1. Kaggle account: Settings → Phone verification.
   2. Datasets → New Dataset: upload `InfraVision/human_detection/pop_yolo_colab.zip` (private).
   3. Import `colab_training/train_pop_yolo_kaggle.ipynb`, Add Input → that dataset, Accelerator → GPU, Run All.
   4. Download `pop_1024.zip` from the Output tab. Copy `weights/best.pt` into `InfraVision/checkpoints/yolo/best.pt`.
   - Done when: `checkpoints/yolo/best.pt` exists. Then hand C6 to Claude.
+  - Done 2026-10-31 (run with flood copies): val mAP50 0.862 (epoch 31, early stop 47). **POP test: P 0.768, R 0.572, mAP50 0.630** (target 0.65). Flood test 0.990 is invalid: 24% of empty water blobs are detected as people (shortcut), see C1 v2.
 - [x] **U2: get the full LLVIP dataset**
   - Done 2026-10-31: 12025 train / 3463 test pairs at `datasets/LLVIP`.
   - The current copy has an empty `infrared/` folder and only 9251 of 12025 visible train images.
@@ -102,6 +103,8 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
 - [x] **C5: colorizer training code** (needs U2)
   - Done 2026-10-31: `infravision/train/thermovision.py` (ImageNet ResNet34 encoder, L1 + edge + VGG + Cb/Cr chroma, logs val saturation), `scripts/pack_llvip.py`, Kaggle notebook. Smoke-tested, with a test. Training itself = U5.
   - Add ThermoVision U-Net training (L1 + edge + VGG + Lab-chroma losses) to `infravision/train/colorizer.py`, plus a Kaggle notebook.
+- [ ] **C1 v2: fix the flood shortcut** (found 2026-10-31)
+  - Add the same number of empty water blobs (no person) to every flooded copy, train and test, so a blob no longer means "person". Rebuild the zip; then one more YOLO run on Kaggle. Gate: empty blobs detected < 2%, and the flood test score drops to a believable value.
 - [ ] **C6: detection evaluation** (needs U1)
   - Sweep imgsz, tiling (`detection.tile`) and TTA on POP val, then pick the best.
   - Report test-set P / R / mAP@0.5 to `results/detection_upgrade.json` and update `docs/RESULTS.md`.
