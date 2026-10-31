@@ -109,5 +109,6 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   - Converters for HIT-UAV and WiSARD into YOLO format (person only, full resolution), plus WiSARD thermal/RGB pairs for the colorizer.
   - Evaluate the POP YOLO on POP test, `test_flood`, HIT-UAV and WiSARD → `results/disaster_eval.json`. Then a combined Kaggle fine-tune.
 - [ ] **C7: dashboard** (RUN_ORDER 4)
+  - Mostly done 2026-10-31: `app.py` has the 4-stage view, confidence / tiling / hotspot-blend sliders, SR selector (EDSR / bicubic / off), victim-count badge, per-branch ms table, model quality from the checkpoints, downloads (overlay PNG; zip with all stages + JSON report) and a Batch tab (gallery, CSV, zip). Tested end to end through the Gradio API (stock yolo11s, CPU test colorizer): ~1.8 s per POP frame with bicubic. `--yolo` flag for testing before the POP weights land. **Left:** video / frame-stream mode, and a visual check in a browser (no Playwright here).
   - Extend `app.py`: 4-stage view, conf / tiling / hotspot sliders, SR selector, victim count, per-branch ms, export.
   - Check it with the Playwright MCP.

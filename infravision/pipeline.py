@@ -84,6 +84,7 @@ class Pipeline:
             thermal=gray,
             pre_enhanced=a["pre_enhanced"],
             sr=a["sr"],
+            colorized=a["colorized"],   # colorizer output before colour boost / hotspots
             enhanced_rgb=rgb,
             fused=fused,
             detections=dict(boxes=boxes, scores=det["scores"], count=int(len(det["scores"])),
