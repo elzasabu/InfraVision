@@ -21,6 +21,18 @@ Owner **U** = the user (accounts, downloads, uploads, pushing). Owner **C** = Cl
 - **Colorizer:** the ThermoVision exp7 U-Net is merged (`infravision/colorizer.py`) but has **no weights and no training code** in this repo.
 - **Priority order:** detection first, then SR, then the colorizer, then the dashboard.
 
+## Models: what each does and where it trains
+
+All training runs on Kaggle (free GPU, about 30 GPU hours a week **per account**, at most 12 h per session). Inference runs on the laptop CPU.
+
+| Model | Job in the pipeline | Trains on | Notebook / task | Before | Target |
+|---|---|---|---|---|---|
+| YOLO11s | finds people (Branch B) | POP (drone thermal, person boxes) | `colab_training/train_pop_yolo_kaggle.ipynb` (U1) | 0.037 mAP@0.5 (FLIR street model) | > 0.65 mAP@0.5 on POP test |
+| EDSR x2 | sharpens the thermal frame (Branch A) | POP crops | C3 (notebook still to be written) | old checkpoint 40.69 dB, worse than bicubic's 43.02 dB | beat bicubic PSNR/SSIM on POP val |
+| ThermoVision U-Net | thermal → colour (Branch A) | LLVIP pairs (later maybe WiSARD / NII-CU) | C5 (notebook still to be written) | false-colour map: 9.06 dB PSNR, 0.21 SSIM | well above the baselines; saturation > 0.18 after C4 |
+
+The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` after each run.
+
 ## User tasks
 
 - [ ] **U1: train YOLO on Kaggle**
