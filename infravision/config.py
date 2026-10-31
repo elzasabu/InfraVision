@@ -10,7 +10,7 @@ DEFAULT_CONFIG = ROOT / "configs" / "infravision.yaml"
 
 DEFAULTS = {
     "device": "auto",
-    "datasets": {"pop": ["POP", "../datasets/POP"]},
+    "datasets": {"pop": ["POP", "../datasets/POP"], "llvip": ["LLVIP", "../datasets/LLVIP"]},
     "pre_enhance": {"enabled": True, "clahe": True, "clahe_clip": 2.0, "clahe_tiles": 8,
                     "denoise": True, "denoise_strength": 5, "denoise_method": "nlmeans", "clahe_stage": "pre"},
     "sr": {"enabled": True, "backend": "edsr", "scale": 2, "max_input_side": 1280, "weights": []},

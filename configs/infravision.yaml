@@ -10,6 +10,9 @@ datasets:
   pop:
     - POP
     - ../datasets/POP
+  llvip:                # colorizer training (infravision.train.thermovision)
+    - LLVIP
+    - ../datasets/LLVIP
 
 # Branch A: denoise -> super-resolution -> CLAHE (clahe_stage: post) -> colorize.
 pre_enhance:
@@ -46,7 +49,8 @@ colorizer:
                         # enhanced (CLAHE + SR frame) for infravision_tiny
   detail: 0.5           # add back SR thermal detail to the upsampled colour (0 = off)
   # thermovision backend: one checkpoint, run on the whole frame at input_size x input_size.
-  checkpoint: checkpoints/colorizer/thermovision_exp7_last.pth   # copy step: README "Model weights"
+  # From colab_training/train_colorizer_kaggle.ipynb (LLVIP). Old ThermoVision exp7: thermovision_exp7_last.pth
+  checkpoint: checkpoints/colorizer/thermovision_llvip_v1.pth
   input_size: 256       # the size the U-Net was trained at (multiple of 32)
   # infravision_tiny backend: first existing file wins, run at work_side (longer side).
   work_side: 640

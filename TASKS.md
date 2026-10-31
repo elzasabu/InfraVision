@@ -30,7 +30,7 @@ All training runs on Kaggle (free GPU, about 30 GPU hours a week **per account**
 |---|---|---|---|---|---|
 | YOLO11s | finds people (Branch B) | POP (drone thermal, person boxes) | `colab_training/train_pop_yolo_kaggle.ipynb` (U1) | 0.037 mAP@0.5 (FLIR street model) | > 0.65 mAP@0.5 on POP test |
 | EDSR x2 | sharpens the thermal frame (Branch A) | POP crops | C3 (notebook still to be written) | old checkpoint 40.69 dB, worse than bicubic's 43.02 dB | beat bicubic PSNR/SSIM on POP val |
-| ThermoVision U-Net | thermal → colour (Branch A) | LLVIP pairs (later maybe WiSARD / NII-CU) | C5 (notebook still to be written) | false-colour map: 9.06 dB PSNR, 0.21 SSIM | well above the baselines; saturation > 0.18 after C4 |
+| ThermoVision U-Net | thermal → colour (Branch A) | LLVIP pairs (later maybe WiSARD / NII-CU) | `colab_training/train_colorizer_kaggle.ipynb` (U5) | false-colour map: 9.06 dB PSNR, 0.21 SSIM | well above the baselines; saturation > 0.18 after C4 |
 
 The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` after each run.
 
@@ -52,6 +52,11 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   - WiSARD: sites.google.com/uw.edu/wisard
   - NII-CU MAPD: www.nii-cu-multispectral.org
   - Check each licence. Put them at `datasets/WiSARD/`, `datasets/NII-CU/`, then tell Claude the folder layout.
+- [ ] **U5: train the colorizer on Kaggle** (teammate account is fine)
+  1. Upload `datasets/llvip_colorizer.zip` as a private Kaggle dataset.
+  2. New notebook → File → Import Notebook → `colab_training/train_colorizer_kaggle.ipynb`. Add Input → that dataset. GPU T4, Internet on.
+  3. Save Version → Save & Run All (Commit).
+  4. Output tab → `colorizer_llvip.zip` → copy `thermovision_best.pth` to `InfraVision/checkpoints/colorizer/thermovision_llvip_v1.pth`.
 - [ ] **U4: push when asked:** `git push -u origin feature/rev1` (from `InfraVision/`).
 
 ## Claude tasks
@@ -74,7 +79,8 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
 - [ ] **C4: colorizer post-processing** (RUN_ORDER 3), CPU only
   - LAB chroma boost (`chroma_boost: 1.8`) and thermal hotspot fusion (top 5% heat, magma LUT, `alpha: 0.35`).
   - Both are config switches, with tests.
-- [ ] **C5: colorizer training** (needs U2)
+- [x] **C5: colorizer training code** (needs U2)
+  - Done 2026-10-31: `infravision/train/thermovision.py` (ImageNet ResNet34 encoder, L1 + edge + VGG + Cb/Cr chroma, logs val saturation), `scripts/pack_llvip.py`, Kaggle notebook. Smoke-tested, with a test. Training itself = U5.
   - Add ThermoVision U-Net training (L1 + edge + VGG + Lab-chroma losses) to `infravision/train/colorizer.py`, plus a Kaggle notebook.
 - [ ] **C6: detection evaluation** (needs U1)
   - Sweep imgsz, tiling (`detection.tile`) and TTA on POP val, then pick the best.
