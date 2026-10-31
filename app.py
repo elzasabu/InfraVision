@@ -25,7 +25,7 @@ import torch
 
 from infravision.config import ROOT, load_config, merge
 from infravision.data.pop import POP_ROOT
-from infravision.io import ThermalImageError, list_images, read_rgb, save_rgb
+from infravision.io import ThermalImageError, list_images, read_rgb, read_thermal, save_rgb
 from infravision.pipeline import Pipeline
 
 POP_TEST = POP_ROOT / "test" / "JPEGImages"
@@ -66,8 +66,10 @@ def paired_examples():
 
 COLORIZERS = {"ThermoVision U-Net (default)": "thermovision",
               "InfraVision tiny (old, for comparison)": "infravision_tiny"}
-SR_MODELS = {"EDSR x2 (trained on POP)": "edsr", "Bicubic x2 (no model, fastest)": "bicubic",
+# Bicubic first (the default): EDSR works on the 2x frame, ~60 s per full POP frame on a laptop CPU.
+SR_MODELS = {"Bicubic x2 (no model, fast)": "bicubic", "EDSR x2 (trained on POP, ~1 min/frame on CPU)": "edsr",
              "Off (1x, quickest on CPU)": "off"}
+PALETTES = ["White-hot (people bright)", "Black-hot (people dark)"]
 TILES = {"Off (whole frame)": 0, "2 x 2 tiles": 2, "3 x 3 tiles (small people)": 3}
 
 
@@ -93,12 +95,14 @@ class Pipelines:
             self.cache[key] = Pipeline(self.config, over)
         return self.cache[key]
 
-    def run(self, path, colorizer, sr, conf, tiles, hotspot):
+    def run(self, path, colorizer, sr, conf, tiles, hotspot, black_hot=False):
         p = self.get(colorizer, sr)
+        # Models were trained on white-hot frames (warm = bright); black-hot footage is flipped first.
+        image = 255 - read_thermal(path)[0] if black_hot else path
         with self.lock:
             p.detector.conf, p.detector.tile = float(conf), int(tiles)
             p.enhancer.post_cfg = {**p.cfg.get("color_post", {}), "hotspot_alpha": float(hotspot) / 100}
-            return p, p.run(path)
+            return p, p.run(image)
 
 
 def checkpoint_metrics(path):
@@ -179,7 +183,7 @@ def build(pipes, default_colorizer="thermovision"):
     pops = pop_examples()
     synth, by_thermal = paired_examples()
     choices = {**pops, **synth}
-    pipe = pipes.get(default_colorizer, "edsr")
+    pipe = pipes.get(default_colorizer, "bicubic")
     info = pipe.describe()
     det_cfg, post_cfg = pipe.cfg["detection"], pipe.cfg.get("color_post", {})
     default_col = next((k for k, v in COLORIZERS.items() if v == default_colorizer), next(iter(COLORIZERS)))
@@ -196,23 +200,25 @@ def build(pipes, default_colorizer="thermovision"):
             label = f"real RGB with synthetic {label}"
         return (read_rgb(p) if p.exists() else None), label
 
-    def settings_of(colorizer, sr, conf, tiles, hotspot):
-        return dict(colorizer=COLORIZERS.get(colorizer, default_colorizer), sr=SR_MODELS.get(sr, "edsr"),
-                    conf=float(conf), tiles=TILES.get(tiles, 0), hotspot_percent=float(hotspot))
+    def settings_of(colorizer, sr, conf, tiles, hotspot, palette):
+        return dict(colorizer=COLORIZERS.get(colorizer, default_colorizer), sr=SR_MODELS.get(sr, "bicubic"),
+                    conf=float(conf), tiles=TILES.get(tiles, 0), hotspot_percent=float(hotspot),
+                    black_hot=palette == PALETTES[1])
 
     def run_one(path, s):
         try:
-            return pipes.run(path, s["colorizer"], s["sr"], s["conf"], s["tiles"], s["hotspot_percent"])
+            return pipes.run(path, s["colorizer"], s["sr"], s["conf"], s["tiles"], s["hotspot_percent"],
+                             s["black_hot"])
         except ThermalImageError as e:
             raise gr.Error(str(e))
         except Exception as e:   # e.g. a checkpoint that does not load
             raise gr.Error(f"{type(e).__name__}: {e}")
 
-    def process(upload, pick, which, colorizer, sr, conf, tiles, hotspot):
+    def process(upload, pick, which, colorizer, sr, conf, tiles, hotspot, palette):
         path = upload or (choices.get(pick) if pick else None)
         if not path:
             raise gr.Error("Upload a thermal image or pick one from the list.")
-        s = settings_of(colorizer, sr, conf, tiles, hotspot)
+        s = settings_of(colorizer, sr, conf, tiles, hotspot, palette)
         p, r = run_one(path, s)
         rep = report(path, p, r, s)
         out = Path(tempfile.mkdtemp(prefix="infravision_"))
@@ -237,10 +243,10 @@ def build(pipes, default_colorizer="thermovision"):
                 info_md, [str(png), str(bundle)],
                 gr.update(value=rgb, label=rgb_label or "real RGB (only for synthetic samples)"))
 
-    def process_batch(files, colorizer, sr, conf, tiles, hotspot, progress=gr.Progress()):
+    def process_batch(files, colorizer, sr, conf, tiles, hotspot, palette, progress=gr.Progress()):
         if not files:
             raise gr.Error("Add one or more thermal images.")
-        s = settings_of(colorizer, sr, conf, tiles, hotspot)
+        s = settings_of(colorizer, sr, conf, tiles, hotspot, palette)
         out = Path(tempfile.mkdtemp(prefix="infravision_batch_"))
         rows, gallery, reports = [], [], []
         for f in progress.tqdm(files, desc="frames"):
@@ -284,6 +290,7 @@ def build(pipes, default_colorizer="thermovision"):
                 tiles = gr.Radio(list(TILES), value=default_tiles, label="Tiled detection (finds smaller people)")
                 hotspot = gr.Slider(0, 100, value=round(100 * float(post_cfg.get("hotspot_alpha", 0.35))), step=5,
                                     label="Thermal hotspot blend (%)")
+                palette = gr.Radio(PALETTES, value=PALETTES[0], label="Input palette (black-hot gets flipped)")
             with gr.Column(scale=3):
                 with gr.Tab("Single image"):
                     with gr.Row():
@@ -319,7 +326,7 @@ def build(pipes, default_colorizer="thermovision"):
                                           file_count="multiple")
         gr.Markdown("Colours are estimated by a model trained on LLVIP street scenes; they are not temperatures. "
                     "Hotspots mark the warmest pixels of each frame (not only people).")
-        controls = [colorizer, sr, conf, tiles, hotspot]
+        controls = [colorizer, sr, conf, tiles, hotspot, palette]
         run_btn.click(process, [upload, pick, which] + controls,
                       [s1, s2, s3, s4, count, latency, quality, files, p_rgb])
         batch_btn.click(process_batch, [batch_in] + controls, [batch_gal, batch_sum, batch_files])
