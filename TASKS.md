@@ -34,6 +34,15 @@ All training runs on Kaggle (free GPU, about 30 GPU hours a week **per account**
 
 The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` after each run.
 
+## Where we are (2026-11-01, end of session)
+
+- **Detection** (YOLO, `checkpoints/yolo/best.pt`): POP test mAP50 0.630. On new footage it drops: WiSARD IR sample 0.435. Real test (other machine): cliff/woods frame good (9 boxes on ~7 people, some double counts); **people in water, side angle: 0 found**.
+- **Biggest gap = water / flood people.** No public thermal aerial dataset of people in water exists (searched). Plan: (1) dataset request email to the IWT-YOLO authors (Sensors 2024, 24(11) 3321, hejicker@163.com; draft was written, user sends from uni mail + CC supervisor); (2) user collects thermal water-rescue clips (U8), Claude extracts frames + pre-labels (C9); (3) C1 v2 + real-water copy-paste augmentation.
+- **Colorizer v1** installed: works, but dark "night photo" look (LLVIP is night-only, memorised ~18 street cameras). Fix later with daytime aerial pairs (WiSARD). Cosmetic, lowest priority.
+- **EDSR run 3** (fp32) healthy: 46.33 dB vs bicubic 42.76 at epoch 22/30. Waiting for `edsr_pop.zip` (U6). EDSR costs **61 s per full POP frame on CPU** (measured), so the GUI default is bicubic; EDSR stays selectable.
+- **GUI** (`app.py`): bicubic default, new black-hot/white-hot palette switch. Weights zip for other machines: `/run/media/advaithmanoj/SharedData/Projects/Infravision/Data/infravision_weights.zip` (unzip inside the cloned `InfraVision/`). Add `checkpoints/sr/edsr_best.pth` to it once EDSR is in.
+- **Downloads:** slow servers (Zenodo ~0.36 MB/s per connection) → `scripts/pdl.sh URL OUT 16` (parallel ranges, ~9x faster). The user's internet may be phone tethering (data cap!).
+
 ## User tasks
 
 **Every training run now stops itself early if it is broken** (NaN loss, EDSR more than 3 dB below bicubic, colorizer output flat, YOLO mAP50 < 0.05 at epoch 5). A run that fails in the first minutes with `HEALTH CHECK FAILED` means: send Claude the log.
@@ -71,11 +80,14 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   2. New notebook → File → Import Notebook → `colab_training/train_sr_kaggle.ipynb`. Add Input → that dataset. GPU T4, Internet on.
   3. Save Version → Save & Run All (Commit).
   4. Output tab → `edsr_pop.zip` → copy `edsr_best.pth` to `InfraVision/checkpoints/sr/edsr_best.pth`. The last cell says whether it beats bicubic. If it doesn't, set `sr.backend: bicubic`.
+  - Run 3 (2026-11-01, fp32) healthy: 45.90 dB at epoch 1, 46.33 dB by epoch 21 (bicubic 42.76). **Next:** user puts `edsr_pop.zip` in `datasets/outputs/` (replace the old 8 KB one); Claude verifies, installs, compares on real POP frames, adds it to the external-drive weights zip.
 - [ ] **U7: disaster datasets** (replaces U3)
   - HIT-UAV (thermal drone, person boxes, CC BY 4.0): `git clone https://github.com/suojiashun/HIT-UAV-Infrared-Thermal-Dataset` into `datasets/HIT-UAV/`.
   - WiSARD (wilderness SAR, thermal + RGB, MIT-style licence), from sites.google.com/uw.edu/wisard: first the **971.6 MB Multi Modal Sample** into `datasets/WiSARD/`. Only get the 40.5 GB full set if the sample shows a clear gain.
   - Then hand C8 to Claude.
-- [ ] **U8: real flood test frames** (optional, later)
+  - 2026-11-01: **AIResQ benchmark** downloaded instead (Zenodo 17405074, CC BY 4.0, 1989 thermal drone images 640x512, 2643 person boxes, YOLO format) at `datasets/AIResQ/Benchmark/{images,labels}`. The full 2048x1536 AIResQ (Zenodo 17405323) is access-restricted (request on Zenodo). HIT-UAV not cloned yet. WiSARD full (40 GB) on hold: no water scenes; the user will send the link in a new chat; test server speed first, use `scripts/pdl.sh` if slow.
+- [ ] **U8: real flood / water-rescue frames** (now the top priority)
+  - Thermal clips of people in water (rescue / news / YouTube), top-down **and** oblique. Internal testing only, do not redistribute. Also send the IWT-YOLO dataset request email.
   - 50–100 thermal drone frames of people in water (news / rescue footage) in `datasets/flood_real/`. Claude pre-labels them with YOLO; you only fix the boxes (CVAT or Roboflow).
 - [ ] **U4: push when asked:** `git push -u origin feature/rev1` (from `InfraVision/`).
 
@@ -111,9 +123,16 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   - Sweep imgsz, tiling (`detection.tile`) and TTA on POP val, then pick the best.
   - Report test-set P / R / mAP@0.5 to `results/detection_upgrade.json` and update `docs/RESULTS.md`.
 - [ ] **C8: disaster datasets → YOLO + eval** (needs U7)
+  - Partial 2026-11-01: WiSARD IR sample (264 frames) mAP50 0.435 @640 / 0.411 @1024 → `results/disaster_eval.json`. **AIResQ eval was running when the session ended; rerun:** `ultralytics val` of `checkpoints/yolo/best.pt` on `datasets/AIResQ/Benchmark` (data yaml: path=that folder, train/val=images, names {0: person}; imgsz 640 and 1024) and add it to `disaster_eval.json`.
   - Converters for HIT-UAV and WiSARD into YOLO format (person only, full resolution), plus WiSARD thermal/RGB pairs for the colorizer.
   - Evaluate the POP YOLO on POP test, `test_flood`, HIT-UAV and WiSARD → `results/disaster_eval.json`. Then a combined Kaggle fine-tune.
+- [ ] **C9: water data tooling** (after U8 clips arrive)
+  - Script: video → frames (every N s, dedupe) → YOLO pre-labels in YOLO txt for fixing in CVAT/Roboflow → `datasets/flood_real/`.
+  - Copy-paste augmentation: real thermal people (POP crops, cut at a water line) pasted into real thermal water backgrounds from the clips; replaces the painted blobs of C1.
+  - Check: tiling on small frames (600x460 web image with 3x3 tiles magnifies people ~4x); auto-disable tiles when tiles get smaller than ~400 px if it helps.
+  - Then one Kaggle YOLO run on POP + AIResQ (+ HIT-UAV) + water data; gate on the real water frames.
 - [ ] **C7: dashboard** (RUN_ORDER 4)
+  - 2026-11-01: bicubic default (EDSR 61 s/frame CPU), black-hot palette switch.
   - Mostly done 2026-10-31: `app.py` has the 4-stage view, confidence / tiling / hotspot-blend sliders, SR selector (EDSR / bicubic / off), victim-count badge, per-branch ms table, model quality from the checkpoints, downloads (overlay PNG; zip with all stages + JSON report) and a Batch tab (gallery, CSV, zip). Tested end to end through the Gradio API (stock yolo11s, CPU test colorizer): ~1.8 s per POP frame with bicubic. `--yolo` flag for testing before the POP weights land. **Left:** video / frame-stream mode, and a visual check in a browser (no Playwright here).
   - Extend `app.py`: 4-stage view, conf / tiling / hotspot sliders, SR selector, victim count, per-branch ms, export.
   - Check it with the Playwright MCP.
