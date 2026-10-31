@@ -1,0 +1,45 @@
+{
+  "clean": {
+    "bicubic": {
+      "psnr": 47.70998140970866,
+      "ssim": 0.9922936658064524
+    },
+    "edsr": {
+      "psnr": 44.400200271606444,
+      "ssim": 0.9868975818157196
+    },
+    "edsr_wins_psnr": 0
+  },
+  "degraded": {
+    "bicubic": {
+      "psnr": 40.414659372965495,
+      "ssim": 0.9595232745011647
+    },
+    "edsr": {
+      "psnr": 41.841270446777344,
+      "ssim": 0.9721726655960083
+    },
+    "edsr_wins_psnr": 30
+  },
+  "train_deg": {
+    "bicubic": {
+      "psnr": 40.7693909962972,
+      "ssim": 0.9576730648676555
+    },
+    "edsr": {
+      "psnr": 43.48085873921712,
+      "ssim": 0.9801830569903056
+    },
+    "edsr_wins_psnr": 30
+  },
+  "frames": 30,
+  "frame_size": "1280x1024",
+  "weights": "/home/advaithmanoj/Projects/InfraVision/Rev1/Source/InfraVision/checkpoints/sr/edsr_best.pth",
+  "seed": 0,
+  "edsr_ms_per_frame_cpu": 15513.748531899999,
+  "flights": [
+    "T1",
+    "T2",
+    "T3"
+  ]
+}

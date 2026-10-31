@@ -42,10 +42,29 @@ recipe (blur, x2 down, bicubic up, noise, JPEG); scored against the clean crop.
 |---|---|---|
 | bicubic (baseline) | **43.02** | **0.966** |
 | EDSR, old checkpoint `SR/checkpoints/ssim_residual/…epoch_10.pth` | 40.69 | 0.964 |
+| **EDSR v3** `checkpoints/sr/edsr_best.pth` (Kaggle run 3, fp32, 30 epochs, best epoch 29) | **46.02** | **0.986** |
 
 The old checkpoint was trained on other data and is *worse than bicubic* on
-POP. A 2-epoch CPU preview run on POP crops already matched bicubic
-(42.84 vs 42.83 dB), so POP training on Colab should beat it.
+POP. EDSR v3 (2026-11-01) is +3.0 dB over bicubic here (training log, 300 val
+frames: 46.34 dB / 0.9868 vs bicubic 42.76 dB).
+
+### Full POP test frames (`scripts/eval_sr_test.py` → `results/sr_test_eval.json`)
+
+30 POP test frames (T1-T3), full 1280x1024 frame as ground truth, x2 low-res input, seed 0.
+
+| low-res input | bicubic PSNR / SSIM | EDSR v3 PSNR / SSIM | EDSR wins |
+|---|---|---|---|
+| clean x2 downscale (INTER_AREA; CLAUDE.md protocol) | **47.71 / 0.992** | 44.40 / 0.987 | 0 / 30 |
+| blur + noise + JPEG at low res | 40.41 / 0.960 | **41.84 / 0.972** | 30 / 30 |
+| training degradation on the full frame | 40.77 / 0.958 | **43.48 / 0.980** | 30 / 30 |
+
+EDSR v3 is a *restorer*: it removes blur, noise and JPEG artefacts and wins on
+every degraded frame, but on a clean downscale it smooths away real fine texture
+and loses to bicubic by 3.3 dB. So the RUN_ORDER Phase 1 gate (beat bicubic's
+~47.9 dB on clean POP) is **not** met. Fix: retrain with part of the batches
+undegraded (clean downscale only). Visually (`results/edsr_v3_zoom.jpg`, people
+crops from POP test) EDSR is slightly crisper than bicubic with no artefacts.
+CPU cost: 15.5 s for a 640x512 → 1280x1024 frame, ~61 s for a full POP frame → 2560x2048.
 
 ## Colorizer: thermal to RGB (synthetic set)
 

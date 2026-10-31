@@ -39,8 +39,8 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
 - **Detection** (YOLO, `checkpoints/yolo/best.pt`): POP test mAP50 0.630. On new footage it drops: WiSARD IR sample 0.435. Real test (other machine): cliff/woods frame good (9 boxes on ~7 people, some double counts); **people in water, side angle: 0 found**.
 - **Biggest gap = water / flood people.** No public thermal aerial dataset of people in water exists (searched). Plan: (1) dataset request email to the IWT-YOLO authors (Sensors 2024, 24(11) 3321, hejicker@163.com; draft was written, user sends from uni mail + CC supervisor); (2) user collects thermal water-rescue clips (U8), Claude extracts frames + pre-labels (C9); (3) C1 v2 + real-water copy-paste augmentation.
 - **Colorizer v1** installed: works, but dark "night photo" look (LLVIP is night-only, memorised ~18 street cameras). Fix later with daytime aerial pairs (WiSARD). Cosmetic, lowest priority.
-- **EDSR run 3** (fp32) healthy: 46.33 dB vs bicubic 42.76 at epoch 22/30. Waiting for `edsr_pop.zip` (U6). EDSR costs **61 s per full POP frame on CPU** (measured), so the GUI default is bicubic; EDSR stays selectable.
-- **GUI** (`app.py`): bicubic default, new black-hot/white-hot palette switch. Weights zip for other machines: `/run/media/advaithmanoj/SharedData/Projects/Infravision/Data/infravision_weights.zip` (unzip inside the cloned `InfraVision/`). Add `checkpoints/sr/edsr_best.pth` to it once EDSR is in.
+- **EDSR v3 installed** (`checkpoints/sr/edsr_best.pth`, also in the external-drive weights zip): POP val 46.02 dB vs bicubic 43.02. On 30 full POP test frames it wins 30/30 on degraded (blur/noise/JPEG) input but **loses on a clean x2 downscale (44.40 vs 47.71 dB)**: it over-smooths. Details in `docs/RESULTS.md`. EDSR costs **61 s per full POP frame on CPU**, so the GUI default stays bicubic; EDSR stays selectable.
+- **GUI** (`app.py`): bicubic default, new black-hot/white-hot palette switch. Weights zip for other machines: `/run/media/advaithmanoj/SharedData/Projects/Infravision/Data/infravision_weights.zip` (unzip inside the cloned `InfraVision/`). Holds YOLO, colorizer and EDSR v3.
 - **Downloads:** slow servers (Zenodo ~0.36 MB/s per connection) → `scripts/pdl.sh URL OUT 16` (parallel ranges, ~9x faster). The user's internet may be phone tethering (data cap!).
 
 ## User tasks
@@ -73,14 +73,14 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   2. New notebook → File → Import Notebook → `colab_training/train_colorizer_kaggle.ipynb`. Add Input → that dataset. GPU T4, Internet on.
   3. Save Version → Save & Run All (Commit).
   4. Output tab → `colorizer_llvip.zip` → copy `thermovision_best.pth` to `InfraVision/checkpoints/colorizer/thermovision_llvip_v1.pth`.
-- [ ] **U6: train EDSR on Kaggle** (third account is fine)
+- [x] **U6: train EDSR on Kaggle** (third account is fine)
+  - Done 2026-11-01 (run 3, fp32, 196 min): best epoch 29, POP val 46.34 dB / SSIM 0.9868 (bicubic 42.76). Installed. Optional later run 4: mix in undegraded batches so it also beats bicubic on clean input (see RESULTS.md).
   - Run 1 (2026-10-31) failed: stuck at 5.6 dB for all 30 epochs (outputs went all-white; the [0,1] clamp killed the gradient). Fixed in the training code; **re-run without attaching the old output** (it would resume the broken `last.pth`).
   - Run 2 (2026-10-31, fixed code) failed: all weights NaN from epoch 1 under fp16. Now trains in fp32 (no `--amp`, loss always fp32), ~2–3 h. Re-import the notebook.
   1. Upload `datasets/pop_raw.zip` (673 MB, original POP layout) as a private Kaggle dataset.
   2. New notebook → File → Import Notebook → `colab_training/train_sr_kaggle.ipynb`. Add Input → that dataset. GPU T4, Internet on.
   3. Save Version → Save & Run All (Commit).
   4. Output tab → `edsr_pop.zip` → copy `edsr_best.pth` to `InfraVision/checkpoints/sr/edsr_best.pth`. The last cell says whether it beats bicubic. If it doesn't, set `sr.backend: bicubic`.
-  - Run 3 (2026-11-01, fp32) healthy: 45.90 dB at epoch 1, 46.33 dB by epoch 21 (bicubic 42.76). **Next:** user puts `edsr_pop.zip` in `datasets/outputs/` (replace the old 8 KB one); Claude verifies, installs, compares on real POP frames, adds it to the external-drive weights zip.
 - [ ] **U7: disaster datasets** (replaces U3)
   - HIT-UAV (thermal drone, person boxes, CC BY 4.0): `git clone https://github.com/suojiashun/HIT-UAV-Infrared-Thermal-Dataset` into `datasets/HIT-UAV/`.
   - WiSARD (wilderness SAR, thermal + RGB, MIT-style licence), from sites.google.com/uw.edu/wisard: first the **971.6 MB Multi Modal Sample** into `datasets/WiSARD/`. Only get the 40.5 GB full set if the sample shows a clear gain.

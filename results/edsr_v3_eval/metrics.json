@@ -1,0 +1,22 @@
+{
+  "sr": {
+    "bicubic": {
+      "psnr": 43.02346584320068,
+      "ssim": 0.9659326940774917
+    },
+    "model": {
+      "psnr": 46.01744079589844,
+      "ssim": 0.9863061302900314
+    },
+    "weights": "checkpoints/sr/edsr_best.pth",
+    "crops": 100,
+    "crop": 192,
+    "scale": 2,
+    "val_flights": [
+      "F13",
+      "F14",
+      "F15",
+      "F16"
+    ]
+  }
+}
