@@ -45,7 +45,8 @@ class Detector:
 
     def _predict(self, bgr, imgsz):
         r = self.model.predict(bgr, imgsz=imgsz, conf=self.conf, iou=self.iou, classes=[0],
-                               device=str(self.device), verbose=False)[0]
+                               device=str(self.device), quantize=16 if self.device.type == "cuda" else None,
+                               verbose=False)[0]
         b = r.boxes
         return b.xyxy.cpu().numpy().astype(np.float32), b.conf.cpu().numpy().astype(np.float32)
 

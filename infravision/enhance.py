@@ -38,6 +38,11 @@ def cyclegan_module():
     return load_module("colorization/models/cyclegan.py", "infravision_cyclegan")
 
 
+def autocast(device):
+    """FP16 autocast on CUDA; no-op on CPU."""
+    return torch.autocast(device.type, dtype=torch.float16, enabled=device.type == "cuda")
+
+
 def state_dict_of(ck):
     """Raw state_dict from any of the checkpoint formats used in this repo."""
     meta = {}
@@ -136,7 +141,9 @@ class SuperResolver:
                 py0, px0 = max(0, y0 - overlap), max(0, x0 - overlap)
                 py1, px1 = min(H, y1 + overlap), min(W, x1 + overlap)
                 patch = x[..., py0:py1, px0:px1].repeat(1, in_ch, 1, 1).to(self.device)
-                pred = self.model(patch).float().mean(1, keepdim=True).cpu()
+                with autocast(self.device):
+                    pred = self.model(patch)
+                pred = pred.float().mean(1, keepdim=True).cpu()
                 out[..., y0:y1, x0:x1] = pred[..., y0 - py0:y1 - py0, x0 - px0:x1 - px0]
         out.clamp_(0, 1)
         return (out[0, 0].numpy() * 255.0).round().astype(np.uint8)
@@ -168,7 +175,7 @@ def colorize_tensor(model, gray, device):
     ph, pw = (-h) % 4, (-w) % 4
     if ph or pw:
         x = F.pad(x, (0, pw, 0, ph), mode="reflect")
-    with torch.inference_mode():
+    with torch.inference_mode(), autocast(torch.device(device)):
         y = model(x)[..., :h, :w]
     y = (y.float().clamp(-1, 1) + 1.0) * 127.5
     return y[0].permute(1, 2, 0).cpu().numpy().round().astype(np.uint8)
