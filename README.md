@@ -18,6 +18,8 @@ licences.
 ```
 thermal frame
  ├─ Branch A: CLAHE + denoise -> EDSR super-resolution -> thermal-to-RGB colorizer
+ │            (the ThermoVision colorizer reads the raw frame it was trained on and
+ │             paints at the SR size, with the SR detail added back)
  └─ Branch B (in parallel): YOLO11 person detection on the original frame
 fusion: boxes rescaled to the upscaled frame, drawn with confidence + "People: N"
 ```
@@ -26,7 +28,8 @@ fusion: boxes rescaled to the upscaled frame, drawn with confidence + "People: N
 |---|---|---|---|
 | Pre-enhance | `infravision/enhance.py` | CLAHE + non-local-means denoise (configurable) | - |
 | Super-resolution | `infravision/enhance.py`, `infravision/train/sr.py` | EDSR, x2 by default | POP |
-| Colorizer | `infravision/enhance.py`, `infravision/train/colorizer.py` | ResNet generator, L1 + VGG (+ optional SSIM / GAN) | LLVIP pairs (+ synthetic disaster variants), FLIR optional |
+| Colorizer (default) | `infravision/colorizer.py`, `infravision/models/thermovision_colorizer.py` | ThermoVision U-Net (ResNet34 encoder), exp7 checkpoint, 256 x 256 | FLIR ADAS street scenes (not POP) |
+| Colorizer (old, selectable) | `infravision/enhance.py`, `infravision/train/colorizer.py` | ResNet generator, L1 + VGG (+ optional SSIM / GAN) | LLVIP pairs (+ synthetic disaster variants), FLIR optional |
 | Detection | `infravision/detect.py`, `infravision/train/yolo.py` | YOLO11s (Ultralytics), one class "person" | POP |
 | Pipeline + fusion | `infravision/pipeline.py`, `infravision/fusion.py` | runs both branches in a thread pool | - |
 
@@ -61,7 +64,7 @@ cd InfraVision
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python -m pytest -q                # 29 tests, a few seconds, no data needed
+python -m pytest -q                # 46 tests, about 15 s, no data needed
 ```
 
 `requirements.txt` pins the versions everything was tested with. For a CUDA
@@ -106,6 +109,64 @@ Without them the app still runs: it falls back to older weights if present
 instead of the colorizer, and says so on screen. YOLO needs at least one
 weights file; `yolo11s.pt` is downloaded by Ultralytics when training starts.
 
+**Colorizer weights (ThermoVision U-Net).** These come from the separate
+ThermoVision project, not from the Colab notebook. Copy them in by hand (93 MB
+each, git-ignored, never commit them):
+
+```
+copy <ThermoVision>\experiments\exp7_resnet34_unet_continue\last.pth checkpoints\colorizer\thermovision_exp7_last.pth   (default)
+copy <ThermoVision>\experiments\exp7_resnet34_unet_continue\best.pth checkpoints\colorizer\thermovision_exp7_best.pth   (optional)
+```
+
+SHA-256: `last.pth` DF322BB7...FF18914C, `best.pth` 70D77BDE...F0775DB4. If the
+file is missing, the pipeline prints the path and this copy step and shows a
+false-colour map instead; a file that exists but does not match the model
+stops with the list of missing/unexpected keys. Put them in the release zip
+next to the other weights to share them.
+
+## Colorizer: ThermoVision U-Net
+
+The default colorizer is the ThermoVision exp7 U-Net (ResNet34 encoder, 24.4 M
+parameters), chosen from 7 candidate checkpoints by LPIPS + SSIM rank on 100
+paired LLVIP/FLIR test images: see
+[docs/colorizer_integration/checkpoint_comparison.md](docs/colorizer_integration/checkpoint_comparison.md).
+It takes the whole raw thermal frame resized to 256 x 256 in [0, 1] and returns
+RGB in [0, 1]; `infravision/colorizer.py` (`ColorizerAdapter.colorize`) handles
+8/16-bit and 1/3-channel input, resizing back to any size, and batches.
+
+Switching colorizers:
+
+```bash
+python -m infravision.infer --input POP/test/JPEGImages --out outputs/old --colorizer infravision_tiny
+python -m infravision.infer --input ... --out ... --colorizer-checkpoint checkpoints/colorizer/thermovision_exp7_best.pth
+python app.py --colorizer infravision_tiny     # or use the "Colorizer" dropdown in the app
+```
+
+or set `colorizer.backend` (`thermovision` | `infravision_tiny`),
+`colorizer.checkpoint`, `colorizer.device` (`auto` | `cpu` | `cuda`, falls back
+to CPU with a warning) and `colorizer.input_size` in `configs/infravision.yaml`.
+
+CPU speed (12 threads): the colorizer itself takes about 0.09 s per frame at
+256 x 256 and 0.5-0.6 s inside the pipeline at a 2560 x 2048 output (resize and
+detail add-back included), against about 2.9 s for the old tiny colorizer. A
+whole 1280 x 1024 POP frame takes about 42 s at 2x SR (44 s before) and about
+10 s in fast mode; the EDSR stage is almost all of it.
+
+Known limitations (measured, see the comparison file):
+- **Washed-out colour.** Saturation is 0.03-0.06 against 0.15-0.55 in real
+  photos: the output is a grey "daylight" picture with a faint tint, and the
+  SR detail added back (`colorizer.detail`) makes it look partly like an
+  embossed thermal image.
+- **Trained on street scenes only (FLIR ADAS).** It has never seen POP drone
+  views. On POP forest frames it gives grey-green haze and sometimes
+  sky-blue patches over warm ground. Night scenes (LLVIP) are painted as day.
+  Some frames get dark borders or a dark stripe at an edge.
+- **Colours are not temperatures** and are not real-world colours: they are
+  the model's guess of what a daylight camera might see, and details can be
+  invented. People that stand out in the thermal frame can fade in the
+  colour frame. Use the thermal view and the detector, not the colours, for
+  decisions.
+
 ## Datasets
 
 Nothing is redistributed; download each from its owner (see
@@ -147,6 +208,7 @@ The `infravision` package reads and the training scripts write one folder:
 checkpoints/
   sr/edsr_best.pth             python -m infravision.train.sr          (+ metrics.json)
   colorizer/colorizer_best.pth python -m infravision.train.colorizer   (+ metrics.json)
+  colorizer/thermovision_exp7_last.pth   copied from ThermoVision (default colorizer, see above)
   yolo/best.pt                 python -m infravision.train.yolo train  (+ thresholds.json)
   smoke/...                    --smoke runs; never read by the demo
 ```
@@ -218,9 +280,10 @@ The app shows thermal input | fused output (colorized + enhanced, people
 boxed, people count) | real RGB (only for images that have a paired RGB, such
 as the synthetic disaster samples). It lists POP test frames and synthetic
 samples to pick from, shows per-branch timings, and offers the fused image as
-a download. "Fast" mode skips the 2x upscale. On a 4-core CPU a 1280x1024
-POP frame took about 46 s at 2x and 12 s in fast mode (see
-[docs/RESULTS.md](docs/RESULTS.md)).
+a download. "Fast" mode skips the 2x upscale, and the "Colorizer" dropdown
+switches between the ThermoVision U-Net and the old tiny colorizer. On a
+4-core CPU a 1280x1024 POP frame took about 46 s at 2x and 12 s in fast mode
+(see [docs/RESULTS.md](docs/RESULTS.md)).
 
 The CLI writes `<name>_fused.png` per image (`--all` adds the enhanced and SR
 frames), `detections.json` and `summary.csv`, and skips unreadable files with

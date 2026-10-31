@@ -1,4 +1,4 @@
-"""Pipeline configuration: defaults, YAML overrides and weight lookup."""
+﻿"""Pipeline configuration: defaults, YAML overrides and weight lookup."""
 import copy
 import json
 from pathlib import Path
@@ -13,7 +13,9 @@ DEFAULTS = {
     "pre_enhance": {"enabled": True, "clahe": True, "clahe_clip": 2.0, "clahe_tiles": 8,
                     "denoise": True, "denoise_strength": 5},
     "sr": {"enabled": True, "scale": 2, "max_input_side": 1280, "weights": []},
-    "colorizer": {"enabled": True, "work_side": 640, "detail": 0.5, "weights": [],
+    "colorizer": {"enabled": True, "backend": "thermovision",
+                  "checkpoint": "checkpoints/colorizer/thermovision_exp7_last.pth", "device": "auto",
+                  "input_size": 256, "input": "auto", "work_side": 640, "detail": 0.5, "weights": [],
                   "fallback_colormap": "inferno"},
     "detection": {"run_on": "original", "imgsz": 1024, "conf": 0.25, "iou": 0.5,
                   "tile": 0, "tile_overlap": 0.2, "weights": []},

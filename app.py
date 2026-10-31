@@ -3,6 +3,7 @@
     python app.py                 # http://127.0.0.1:7860
     python app.py --share         # temporary public link for a friend
     python app.py --device cpu --config configs/infravision.yaml
+    python app.py --colorizer infravision_tiny   # start with the old colorizer (switchable in the UI)
 
 Three panels: thermal input | fused output (colorized + people boxed) | real RGB
 (only for images that have a paired RGB frame, e.g. the synthetic disaster set).
@@ -14,7 +15,7 @@ from pathlib import Path
 
 import gradio as gr
 
-from infravision.config import ROOT
+from infravision.config import ROOT, load_config, merge
 from infravision.io import ThermalImageError, list_images, read_rgb, save_rgb
 from infravision.pipeline import Pipeline
 
@@ -54,11 +55,33 @@ def paired_examples():
     return names, by_thermal
 
 
-def build(pipe, fast_pipe=None):
+COLORIZERS = {"ThermoVision U-Net (default)": "thermovision",
+              "InfraVision tiny (old, for comparison)": "infravision_tiny"}
+
+
+class Pipelines:
+    """One pipeline per (colorizer backend, fast mode), built the first time it is picked."""
+
+    def __init__(self, config=None, overrides=None):
+        self.config, self.over, self.cache = config, overrides or {}, {}
+
+    def get(self, backend, fast=False):
+        key = (backend, fast)
+        if key not in self.cache:
+            over = merge(self.over, {"colorizer": {"backend": backend}})
+            if fast:
+                over = merge(over, {"sr": {"scale": 1}})
+            self.cache[key] = Pipeline(self.config, over)
+        return self.cache[key]
+
+
+def build(pipes, default_backend="thermovision"):
     pops = pop_examples()
     synth, by_thermal = paired_examples()
     choices = {**pops, **synth}
+    pipe = pipes.get(default_backend)
     info = pipe.describe()
+    default_label = next((k for k, v in COLORIZERS.items() if v == default_backend), next(iter(COLORIZERS)))
 
     def paired_rgb(path, which):
         e = by_thermal.get(str(path))
@@ -71,14 +94,18 @@ def build(pipe, fast_pipe=None):
             label = f"real RGB with synthetic {label}"
         return (read_rgb(p) if p.exists() else None), label
 
-    def process(upload, pick, which, speed):
+    def process(upload, pick, which, speed, colorizer):
         path = upload or (choices.get(pick) if pick else None)
         if not path:
             raise gr.Error("Upload a thermal image or pick one from the list.")
+        fast = speed.startswith("Fast") and pipe.enhancer.sr.scale > 1
         try:
-            r = (fast_pipe if speed.startswith("Fast") and fast_pipe else pipe).run(path)
+            p = pipes.get(COLORIZERS.get(colorizer, default_backend), fast)
+            r = p.run(path)
         except ThermalImageError as e:
             raise gr.Error(str(e))
+        except Exception as e:   # e.g. a colorizer checkpoint that does not load
+            raise gr.Error(f"{type(e).__name__}: {e}")
         rgb, rgb_label = paired_rgb(path, which)
         d, t = r["detections"], r["timings"]
         out = Path(tempfile.mkdtemp(prefix="infravision_")) / f"{Path(path).stem}_fused.png"
@@ -86,6 +113,9 @@ def build(pipe, fast_pipe=None):
         lines = [
             f"### People detected: **{d['count']}**",
             f"Input {d['input_size'][0]}x{d['input_size'][1]} → output {d['output_size'][0]}x{d['output_size'][1]}",
+            "",
+            f"Colorizer: {p.enhancer.colorizer.name}",
+            "",
             "",
             "| stage | seconds |", "|---|---|",
             f"| Branch A: pre-enhance | {t['pre_enhance']:.2f} |",
@@ -98,7 +128,7 @@ def build(pipe, fast_pipe=None):
         ]
         if r["notes"]:
             lines += ["", "**Notes:**"] + [f"- {n}" for n in r["notes"]]
-        return (r["thermal"], r["fused"], gr.update(value=rgb, visible=rgb is not None, label=rgb_label or "real RGB"),
+        return (r["thermal"], r["fused"], gr.update(value=rgb, label=rgb_label or "real RGB (none for this image)"),
                 "\n".join(lines), str(out))
 
     with gr.Blocks(title="InfraVision") as demo:
@@ -117,15 +147,19 @@ def build(pipe, fast_pipe=None):
                 speed = gr.Radio([f"Full ({pipe.enhancer.sr.scale}x super-resolution)",
                                   "Fast (1x restore only, much quicker on CPU)"],
                                  value=f"Full ({pipe.enhancer.sr.scale}x super-resolution)", label="Quality")
+                colorizer = gr.Dropdown(list(COLORIZERS), value=default_label, label="Colorizer")
                 run_btn = gr.Button("Run InfraVision", variant="primary")
         with gr.Row():
             p_in = gr.Image(label="Thermal input", interactive=False)
             p_out = gr.Image(label="Fused: colorized + enhanced, people detected", interactive=False)
-            p_rgb = gr.Image(label="real RGB", interactive=False, visible=False)
+            # Always shown: Gradio 6 does not bring back a panel created with visible=False.
+            p_rgb = gr.Image(label="real RGB (synthetic samples only)", interactive=False)
         with gr.Row():
             stats = gr.Markdown()
             dl = gr.File(label="Download fused image")
-        run_btn.click(process, [upload, pick, which, speed], [p_in, p_out, p_rgb, stats, dl])
+        gr.Markdown("Colours are estimated by a model trained on street scenes (FLIR); they are not temperatures "
+                    "and can be wrong, e.g. sky-blue patches on POP forest frames.")
+        run_btn.click(process, [upload, pick, which, speed, colorizer], [p_in, p_out, p_rgb, stats, dl])
     return demo
 
 
@@ -136,11 +170,13 @@ def main():
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=7860)
     p.add_argument("--share", action="store_true")
+    p.add_argument("--colorizer", default=None, choices=list(COLORIZERS.values()),
+                   help="colorizer selected at start (default: colorizer.backend in the config)")
     args = p.parse_args()
     over = {"device": args.device} if args.device else {}
-    pipe = Pipeline(args.config, over)
-    fast = Pipeline(args.config, {**over, "sr": {"scale": 1}}) if pipe.enhancer.sr.scale > 1 else None
-    build(pipe, fast).launch(server_name=args.host, server_port=args.port, share=args.share)
+    backend = args.colorizer or load_config(args.config)["colorizer"]["backend"]
+    build(Pipelines(args.config, over), backend).launch(server_name=args.host, server_port=args.port,
+                                                         share=args.share)
 
 
 if __name__ == "__main__":

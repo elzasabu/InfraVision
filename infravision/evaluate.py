@@ -52,12 +52,46 @@ def eval_sr(cfg, n_val, crop, seed=0):
     return res
 
 
+def eval_thermovision(cfg, pairs, split):
+    """ThermoVision U-Net on whole frames (as trained): raw thermal and RGB at input_size x input_size."""
+    from .colorizer import ColorizerAdapter
+
+    c = cfg["colorizer"]
+    path = find_weights(c["checkpoint"])
+    if path is None:
+        return None
+    ad = ColorizerAdapter(path, "cpu", c["input_size"])
+    s = ad.input_size
+    cmap = COLORMAPS.get(c["fallback_colormap"], cv2.COLORMAP_INFERNO)
+    acc = {}
+    to_t = lambda a: torch.from_numpy(a / 255.0).float().permute(2, 0, 1)[None]
+    for tp, vp, _ in pairs:
+        g = cv2.imdecode(np.fromfile(str(tp), np.uint8), cv2.IMREAD_GRAYSCALE)
+        v = cv2.cvtColor(cv2.imdecode(np.fromfile(str(vp), np.uint8), cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+        tgt = to_t(cv2.resize(v, (s, s), interpolation=cv2.INTER_AREA))
+        g = cv2.resize(g, (s, s), interpolation=cv2.INTER_AREA)
+        preds = {"grey thermal (baseline)": np.repeat(g[..., None], 3, 2),
+                 "false-colour map (baseline)": cv2.cvtColor(cv2.applyColorMap(g, cmap), cv2.COLOR_BGR2RGB),
+                 "colorizer": ad.colorize(g)}
+        for k, rgb in preds.items():
+            a = acc.setdefault(k, [[], []])
+            a[0].append(psnr(to_t(rgb), tgt).item())
+            a[1].append(ssim(to_t(rgb), tgt).item())
+    res = {k: dict(psnr=float(np.mean(v[0])), ssim=float(np.mean(v[1]))) for k, v in acc.items()}
+    return dict(methods=res, pairs=len(pairs), split=split, synthetic_set=True, backend="thermovision",
+                protocol=f"whole frame, raw thermal, {s}x{s}", weights=short(path))
+
+
 def eval_colorizer(cfg, n_val, crop=256):
     pairs = disaster_pairs("test") or []
     split = "test"
     if not pairs:
         pairs, split = disaster_pairs("val"), "val"
     pairs = pairs[:: max(1, len(pairs) // n_val)][:n_val]
+    if cfg["colorizer"].get("backend") == "thermovision":
+        res = eval_thermovision(cfg, pairs, split)
+        if res is not None:
+            return res
     work_side = cfg["colorizer"]["work_side"]
     ds = PairedColor(pairs, crop, work_side, train=False, pre=cfg["pre_enhance"])
     path = find_weights(cfg["colorizer"]["weights"])

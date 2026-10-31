@@ -1,4 +1,4 @@
-# InfraVision pipeline settings. Every key is optional: missing keys use the
+﻿# InfraVision pipeline settings. Every key is optional: missing keys use the
 # defaults in infravision/config.py. Paths are relative to the repository root.
 # Pass another file with --config, or override single keys in code:
 #   load_config(overrides={"sr": {"scale": 1}})
@@ -28,10 +28,19 @@ sr:
 # Branch A step 3: thermal (1 channel) -> RGB (3 channels).
 colorizer:
   enabled: true
-  work_side: 640        # colorize at this longer side, then upsample (CPU friendly)
+  backend: thermovision # thermovision (U-Net, default) | infravision_tiny (old ResnetGenerator)
+  device: auto          # auto = same as the pipeline device | cpu | cuda (falls back to CPU with a warning)
+  input: auto           # auto | raw | enhanced. auto = raw for thermovision (trained on raw previews),
+                        # enhanced (CLAHE + SR frame) for infravision_tiny
   detail: 0.5           # add back SR thermal detail to the upsampled colour (0 = off)
+  # thermovision backend: one checkpoint, run on the whole frame at input_size x input_size.
+  checkpoint: checkpoints/colorizer/thermovision_exp7_last.pth   # copy step: README "Model weights"
+  input_size: 256       # the size the U-Net was trained at (multiple of 32)
+  # infravision_tiny backend: first existing file wins, run at work_side (longer side).
+  work_side: 640
   weights:
     - checkpoints/colorizer/colorizer_best.pth
+    - checkpoints/colorizer/infravision_tiny_75x3.pth   # 75-pair CPU baseline from the audit, for comparison
     - colorization/checkpoints/cyclegan/colorizer_G_AB.pth
   fallback_colormap: inferno   # used, and reported, when no colorizer weights exist
 

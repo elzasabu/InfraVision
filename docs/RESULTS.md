@@ -59,6 +59,54 @@ the clean RGB). Not POP: POP has no RGB.
 | false-colour map, inferno (baseline, what the demo shows now) | 9.06 | 0.209 |
 | trained colorizer | *not trained yet* | |
 
+## Colorizer: ThermoVision U-Net (integrated 2026-10-30, not trained here)
+
+The pipeline's default colorizer is now the **ThermoVision exp7 U-Net**
+(`checkpoints/colorizer/thermovision_exp7_last.pth`). It is a paired,
+supervised regression model (L1 + edge + VGG perceptual + Lab chroma losses,
+no GAN) **trained only on FLIR ADAS street scenes. It was not trained on POP,
+and POP has no RGB to train or score it on.** Nothing was trained or fine-tuned
+for this integration.
+
+Chosen from 7 checkpoints by the rule "lowest sum of LPIPS rank + SSIM rank on
+100 paired test images (50 LLVIP test, 50 FLIR val), ties to structure score,
+then CPU speed". Same 256 x 256 preprocessing for every model; CPU time is the
+median of 27 frames after 3 warm-ups (12 threads). Full tables, data caveats
+and grids: [colorizer_integration/checkpoint_comparison.md](colorizer_integration/checkpoint_comparison.md).
+
+| model | rank sum | PSNR (dB) | SSIM | LPIPS (lower better) | saturation | structure | CPU s / image | peak RAM MB |
+|---|---|---|---|---|---|---|---|---|
+| **ThermoVision exp7 last (default)** | **3** | **12.07** | 0.401 | **0.685** | 0.047 | 0.238 | 0.09 | 562 |
+| ThermoVision exp6 | 4 | 11.89 | **0.402** | 0.693 | 0.046 | 0.246 | 0.09 | 562 |
+| ThermoVision exp7 best (selectable) | 5 | 11.60 | 0.395 | 0.690 | 0.047 | 0.257 | 0.09 | 562 |
+| ThermoVision exp6b | 9 | 10.47 | 0.375 | 0.699 | 0.041 | 0.329 | 0.09 | 561 |
+| ThermoVision exp4 | 10 | 10.38 | 0.368 | 0.694 | 0.050 | 0.342 | 0.98 | 828 |
+| ThermoVision exp3 | 11 | 10.28 | 0.371 | 0.718 | 0.052 | 0.299 | 0.98 | 829 |
+| InfraVision tiny (75 pairs, 3 CPU epochs) | 14 | 11.24 | 0.295 | 0.879 | 0.482 | 0.113 | 0.39 | 533 |
+
+Saturation of the real RGB: 0.55 (LLVIP), 0.15 (FLIR). Structure = edge
+correlation between the thermal input and the output.
+
+What the table does and does not say:
+- exp7 beats exp3 clearly (+1.8 dB, +0.030 SSIM on the same images, 95 % CI
+  well above zero) and runs 11x faster. exp7 last, exp6 and exp7 best are
+  within 0.01 SSIM / LPIPS of each other.
+- Every ThermoVision model is **washed out** (saturation 0.03-0.06) and paints
+  LLVIP **night scenes as day** (output brightness 0.47 vs 0.18). The tiny
+  model's high saturation is one constant dark brown on every image, which is
+  why it scores well on dark LLVIP and collapses on FLIR (5.8 dB).
+- On POP forest frames the output is grey-green haze with occasional sky-blue
+  patches: out of domain. Colours are estimates, not temperatures.
+
+Pipeline before/after on the same 5 POP + 5 paired frames (CLI, 12 threads,
+sequential branches): colorize stage 2.90 s -> 0.51 s per image; whole
+pipeline at 2x SR 38.1 s -> 35.5 s (POP 1280 x 1024: 44.3 s -> 41.8 s; EDSR is
+~40 s of it). Boxes on the 2x output equal the thermal-frame boxes x2 (0 px
+error on 15 detections). Figure: tiny vs exp7 last,
+[colorizer_integration/before_after.png](colorizer_integration/before_after.png).
+
+![before / after](colorizer_integration/before_after.png)
+
 ## Qualitative: 10 POP test frames
 
 ![POP test grid](results/pop_test_grid.jpg)
@@ -87,8 +135,9 @@ Visual check (done by eye on all 10 rows):
 | fusion | 0.00 | 0.00 |
 | **total** | **45.71** | **12.31** |
 
-Branch B runs alongside branch A, so total ≈ branch A. A trained colorizer
-will add a few seconds at its 640 px working size.
+Branch B runs alongside branch A, so total ≈ branch A. (These timings are
+from before the ThermoVision colorizer; with it the colorize stage takes about
+0.5-0.6 s on a 1280 x 1024 POP frame at 2x, see the colorizer section above.)
 
 ## Smoke training (all three models, CPU, 2 epochs)
 
@@ -102,6 +151,8 @@ paths only; the scores are meaningless.
 python -m infravision.train.yolo eval  --split val --max_images 200 --json docs/results/yolo_val.json
 python -m infravision.train.yolo small --split val --max_images 200 --sizes 640 1024 1280 --tiles 0 2 --json docs/results/yolo_small_objects.json
 python -m infravision.evaluate --out docs/results    # SR, colorizer, grid, timings
+# colorizer checkpoint comparison and checks (need the ThermoVision folder; see the scripts' headers)
+python docs/colorizer_integration/scripts/compare_checkpoints.py --help
 python -m infravision.train.smoke
 python -m pytest -q
 ```
