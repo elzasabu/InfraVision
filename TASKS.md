@@ -2,6 +2,7 @@
 
 **How to use:** start a new chat with "Do task C2 from TASKS.md". Each task stands on its own. When a task is finished, tick it, add a one-line result under it, and commit.
 Owner **U** = the user (accounts, downloads, uploads, pushing). Owner **C** = Claude (code, local runs).
+GitHub issues: progress log #15 · U1 #16 · C3 #17 · C5 #18 · C4 #19 · C1 #20 · C6 #21 · C7 #22. Comment on or close the matching issue when a task finishes, and push.
 
 ## Context (read first)
 
