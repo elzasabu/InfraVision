@@ -49,7 +49,8 @@ Owner **U** = the user (accounts, downloads, uploads, pushing). Owner **C** = Cl
   - In each copy, the lower 30–60% of every person box is filled with cool, water-like intensity plus ripple noise. Labels stay unchanged.
   - Add the copies to `human_detection/datasets/pop`, rebuild the zip, and build a flood-occluded test set from POP test.
   - Done when: the augmented images look right by eye (save a grid) and `make_pop_zip.py` includes them.
-- [ ] **C2: Branch A reorder** (RUN_ORDER 1.1–1.2)
+- [x] **C2: Branch A reorder** (RUN_ORDER 1.1–1.2)
+  - Done 2026-10-31: `denoise_method: bilateral`, `clahe_stage: post` (clip 1.5), `sr.backend: edsr | bicubic`. Pre-enhance went from 472 to 13 ms per POP frame. 47 tests pass. PSNR check waits for C3 weights.
   - New order: `cv2.bilateralFilter` → SR → CLAHE (clip 1.5, 8×8) after SR.
   - Config switch `sr.backend: bicubic | edsr`.
   - Removes the 2.5 s NLMeans step. Tests pass. Update the defaults in `configs/infravision.yaml`.

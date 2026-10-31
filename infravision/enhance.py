@@ -58,19 +58,26 @@ def state_dict_of(ck):
 
 # ---------------------------------------------------------------- pre-enhancement
 
+def apply_clahe(gray, clip=2.0, tiles=8):
+    tiles = max(1, int(tiles))
+    return cv2.createCLAHE(clipLimit=float(clip), tileGridSize=(tiles, tiles)).apply(gray)
+
+
 def pre_enhance(gray, clahe=True, clahe_clip=2.0, clahe_tiles=8, denoise=True, denoise_strength=5,
+                denoise_method="nlmeans", bilateral_d=5, bilateral_sigma_color=20, bilateral_sigma_space=5,
                 enabled=True, **_):
-    """Local contrast (CLAHE) and mild non-local-means denoise for a uint8 thermal frame."""
+    """Mild denoise (bilateral or non-local means) and local contrast (CLAHE) for a uint8 thermal frame."""
     if not enabled:
         return gray
     out = gray
-    if denoise and denoise_strength > 0:
+    if denoise and denoise_method == "bilateral":
+        out = cv2.bilateralFilter(out, int(bilateral_d), float(bilateral_sigma_color), float(bilateral_sigma_space))
+    elif denoise and denoise_strength > 0:
         # Denoise first so CLAHE does not amplify sensor noise.
         out = cv2.fastNlMeansDenoising(out, None, h=float(denoise_strength), templateWindowSize=7,
                                        searchWindowSize=21)
     if clahe:
-        tiles = max(1, int(clahe_tiles))
-        out = cv2.createCLAHE(clipLimit=float(clahe_clip), tileGridSize=(tiles, tiles)).apply(out)
+        out = apply_clahe(out, clahe_clip, clahe_tiles)
     return out
 
 
@@ -97,20 +104,20 @@ def load_edsr(path, device="cpu"):
 class SuperResolver:
     """Bicubic x`scale` followed by EDSR restoration; bicubic only when no weights exist."""
 
-    def __init__(self, weights=(), scale=2, max_input_side=1280, device="auto", enabled=True, **_):
+    def __init__(self, weights=(), scale=2, max_input_side=1280, device="auto", enabled=True, backend="edsr", **_):
         self.scale = max(1, int(scale))
         self.enabled = enabled
         self.device = pick_device(device)
         self.max_side = int(max_input_side)
-        self.path = find_weights(weights) if enabled else None
+        self.path = find_weights(weights) if enabled and backend == "edsr" else None
         self.model, self.meta = (load_edsr(self.path, self.device) if self.path else (None, {}))
         self.note = None
-        if enabled and self.model is None:
+        if enabled and backend == "edsr" and self.model is None:
             self.note = "no SR weights found: bicubic upscaling only"
 
     @property
     def name(self):
-        return f"EDSR ({short(self.path) if self.path else 'none'}) x{self.scale}"
+        return f"EDSR ({short(self.path)}) x{self.scale}" if self.path else f"bicubic x{self.scale}"
 
     def __call__(self, gray):
         if not self.enabled:
@@ -280,7 +287,7 @@ class Colorizer:
 # ---------------------------------------------------------------- branch A
 
 class Enhancer:
-    """pre_enhance -> SR -> colorize, with per-stage timings."""
+    """denoise -> SR -> CLAHE -> colorize (clahe_stage: post), or CLAHE before SR (pre), with timings."""
 
     def __init__(self, cfg):
         dev = cfg.get("device", "auto")
@@ -301,11 +308,18 @@ class Enhancer:
 
         t = {}
         t0 = time.perf_counter()
-        pre = pre_enhance(gray, **self.pre_cfg)
+        cfg = self.pre_cfg
+        # CLAHE after SR so the SR model does not sharpen contrast-stretched sensor noise.
+        post = cfg.get("enabled", True) and cfg.get("clahe", True) and cfg.get("clahe_stage") == "post"
+        pre = pre_enhance(gray, **{**cfg, "clahe": cfg.get("clahe", True) and not post})
         t["pre_enhance"] = time.perf_counter() - t0
         t0 = time.perf_counter()
         sr = self.sr(pre)
         t["super_resolution"] = time.perf_counter() - t0
+        if post:
+            t0 = time.perf_counter()
+            sr = apply_clahe(sr, cfg.get("clahe_clip", 2.0), cfg.get("clahe_tiles", 8))
+            t["post_clahe"] = time.perf_counter() - t0
         t0 = time.perf_counter()
         # input: raw -> the model sees the original frame (ThermoVision was trained on raw previews),
         # but the colour is produced at the SR size and gets the SR detail added back.

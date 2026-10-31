@@ -11,18 +11,24 @@ datasets:
     - POP
     - ../datasets/POP
 
-# Branch A step 1: classic enhancement before super-resolution.
+# Branch A: denoise -> super-resolution -> CLAHE (clahe_stage: post) -> colorize.
 pre_enhance:
   enabled: true
-  clahe: true
-  clahe_clip: 2.0       # contrast limit; higher = stronger local contrast
-  clahe_tiles: 8        # grid size (tiles per side)
   denoise: true
-  denoise_strength: 5   # cv2.fastNlMeansDenoising h; 0 disables
+  denoise_method: bilateral   # bilateral (fast, edge-preserving) | nlmeans (old default, ~2.5 s/frame)
+  bilateral_d: 5
+  bilateral_sigma_color: 20
+  bilateral_sigma_space: 5
+  denoise_strength: 5   # nlmeans only: cv2.fastNlMeansDenoising h; 0 disables
+  clahe: true
+  clahe_stage: post     # post = after SR (does not feed amplified noise to SR) | pre = old order
+  clahe_clip: 1.5       # contrast limit; higher = stronger local contrast
+  clahe_tiles: 8        # grid size (tiles per side)
 
 # Branch A step 2: super-resolution (EDSR on a bicubic-upscaled frame).
 sr:
   enabled: true
+  backend: edsr         # edsr (falls back to bicubic without weights) | bicubic
   scale: 2              # output size = input size * scale (1 = restore only)
   max_input_side: 1280  # longer inputs are processed in tiles of this size
   # First existing file wins. checkpoints/ is written by infravision.train.sr.

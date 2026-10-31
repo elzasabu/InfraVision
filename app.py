@@ -120,6 +120,7 @@ def build(pipes, default_backend="thermovision"):
             "| stage | seconds |", "|---|---|",
             f"| Branch A: pre-enhance | {t['pre_enhance']:.2f} |",
             f"| Branch A: super-resolution | {t['super_resolution']:.2f} |",
+            f"| Branch A: CLAHE after SR | {t.get('post_clahe', 0):.2f} |",
             f"| Branch A: colorize | {t['colorize']:.2f} |",
             f"| **Branch A total** | **{t['branch_a']:.2f}** |",
             f"| **Branch B: detection (parallel)** | **{t['branch_b']:.2f}** |",
