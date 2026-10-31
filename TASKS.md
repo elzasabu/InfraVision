@@ -56,7 +56,9 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   - WiSARD: sites.google.com/uw.edu/wisard
   - NII-CU MAPD: www.nii-cu-multispectral.org
   - Check each licence. Put them at `datasets/WiSARD/`, `datasets/NII-CU/`, then tell Claude the folder layout.
-- [ ] **U5: train the colorizer on Kaggle** (teammate account is fine)
+- [x] **U5: train the colorizer on Kaggle** (teammate account is fine)
+  - Done 2026-10-31 (run 2): installed as `checkpoints/colorizer/thermovision_llvip_v1.pth` (best epoch 4: LLVIP val 16.64 dB / SSIM 0.43, baseline false-colour 9.06 / 0.21). POP saturation 0.270 raw → **0.329 after C4** (gate > 0.18 passed), 1.9 s/frame CPU.
+  - Limit: it memorised LLVIP's ~18 fixed street cameras (seen scenes 20.5 dB, new scenes 16.7 dB, blurry). LLVIP colour is night photos, so POP output is a dark night-forest look. Rerunning on LLVIP won't fix it; better colour needs daytime aerial pairs with many viewpoints (full WiSARD, registered).
   - Run 1 (2026-10-31) failed: NaN from epoch 1 (frozen ImageNet BatchNorm blew activations past fp16), output a flat brown fill. Fixed; **re-run without attaching the old output**.
   1. Upload `datasets/llvip_colorizer.zip` as a private Kaggle dataset.
   2. New notebook → File → Import Notebook → `colab_training/train_colorizer_kaggle.ipynb`. Add Input → that dataset. GPU T4, Internet on.
