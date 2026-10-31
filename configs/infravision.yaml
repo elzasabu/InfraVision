@@ -60,6 +60,15 @@ colorizer:
     - colorization/checkpoints/cyclegan/colorizer_G_AB.pth
   fallback_colormap: inferno   # used, and reported, when no colorizer weights exist
 
+# Branch A step 4: after the colorizer (RUN_ORDER 3). Fixes washed-out colour and keeps people visible.
+color_post:
+  enabled: true
+  chroma: 1.8               # LAB a/b multiplier (1 = off); skipped for the fallback false-colour map
+  l_clahe_clip: 1.5         # CLAHE on LAB lightness (0 = off)
+  hotspot_alpha: 0.35       # magma overlay on the hottest pixels (0 = off, 1 = pure false colour)
+  hotspot_percentile: 95    # hottest 5% of the super-resolved thermal frame
+  hotspot_colormap: magma   # magma | inferno | hot | turbo | jet
+
 # Branch B: person detection.
 detection:
   run_on: original      # original | enhanced (pre-enhanced, same size as input)

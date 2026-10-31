@@ -95,7 +95,8 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   - Check `infravision/train/sr.py` against the recipe: 25 epochs, batch 16, AdamW 1e-4, cosine schedule, loss 0.9·L1 + 0.1·(1−SSIM).
   - Make a Kaggle notebook plus a data zip. Smoke-run 1 epoch on CPU.
   - Then **U** runs it on Kaggle. Gate: beats bicubic on POP val (`python -m infravision.evaluate --skip colorizer grid timing`).
-- [ ] **C4: colorizer post-processing** (RUN_ORDER 3), CPU only
+- [x] **C4: colorizer post-processing** (RUN_ORDER 3), CPU only
+  - Done 2026-10-31: `infravision/colorpost.py`, config `color_post` (chroma 1.8 + L CLAHE 1.5; hotspot top 5% of the SR frame before CLAHE, magma, alpha 0.35). Pipeline returns `colorized` (raw) and `enhanced_rgb` (post-processed). ~0.4–0.6 s per full POP frame on CPU. Grids: `results/color_post_grid.jpg`, `results/color_post_zoom.jpg` (made with a 2-epoch CPU colorizer; people hidden in the colour output become clearly visible). Saturation gate (> 0.18) waits for the U5 weights. 54 tests pass.
   - LAB chroma boost (`chroma_boost: 1.8`) and thermal hotspot fusion (top 5% heat, magma LUT, `alpha: 0.35`).
   - Both are config switches, with tests.
 - [x] **C5: colorizer training code** (needs U2)

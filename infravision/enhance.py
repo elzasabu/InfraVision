@@ -298,6 +298,7 @@ class Enhancer:
         if col.get("device") in (None, "", "auto"):
             col["device"] = dev
         self.colorizer = Colorizer(**col)
+        self.post_cfg = cfg.get("color_post", {})
 
     @property
     def notes(self):
@@ -315,6 +316,7 @@ class Enhancer:
         t["pre_enhance"] = time.perf_counter() - t0
         t0 = time.perf_counter()
         sr = self.sr(pre)
+        sr_heat = sr   # before CLAHE: intensities still track temperature (hotspots)
         t["super_resolution"] = time.perf_counter() - t0
         if post:
             t0 = time.perf_counter()
@@ -325,6 +327,12 @@ class Enhancer:
         # but the colour is produced at the SR size and gets the SR detail added back.
         rgb = self.colorizer(sr, source=gray if self.colorizer.input == "raw" else None)
         t["colorize"] = time.perf_counter() - t0
+        t0 = time.perf_counter()
+        from .colorpost import postprocess
+
+        learned = self.colorizer.adapter is not None or self.colorizer.model is not None
+        out = postprocess(rgb, sr_heat, learned=learned, **self.post_cfg)
+        t["color_post"] = time.perf_counter() - t0
         if timings is not None:
             timings.update(t)
-        return dict(pre_enhanced=pre, sr=sr, enhanced_rgb=rgb)
+        return dict(pre_enhanced=pre, sr=sr, colorized=rgb, enhanced_rgb=out)

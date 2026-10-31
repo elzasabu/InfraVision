@@ -18,6 +18,8 @@ DEFAULTS = {
                   "checkpoint": "checkpoints/colorizer/thermovision_exp7_last.pth", "device": "auto",
                   "input_size": 256, "input": "auto", "work_side": 640, "detail": 0.5, "weights": [],
                   "fallback_colormap": "inferno"},
+    "color_post": {"enabled": True, "chroma": 1.8, "l_clahe_clip": 1.5, "hotspot_alpha": 0.35,
+                   "hotspot_percentile": 95, "hotspot_colormap": "magma"},
     "detection": {"run_on": "original", "imgsz": 1024, "conf": 0.25, "iou": 0.5,
                   "tile": 0, "tile_overlap": 0.2, "weights": []},
     "fusion": {"box_color": [0, 255, 0], "outline_color": [0, 0, 0], "thickness": 0,
