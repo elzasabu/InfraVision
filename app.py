@@ -9,7 +9,8 @@ Single image tab: four stages (raw thermal | super-resolved thermal | AI coloriz
 tactical overlay), live controls (detection confidence, tiling, hotspot blend, SR
 model, colorizer), victim count, per-branch latency, model quality and downloads
 (overlay PNG, all stages + JSON report as a zip). Batch tab: many frames at once,
-a gallery, a per-frame CSV and one zip with every overlay.
+a gallery, a per-frame CSV and one zip with every overlay. Video tab: a thermal clip is
+sampled every N seconds; annotated WebM video, people-over-time chart, CSV.
 """
 import argparse
 import csv
@@ -19,6 +20,7 @@ import threading
 import zipfile
 from pathlib import Path
 
+import cv2
 import gradio as gr
 import numpy as np
 import torch
@@ -26,6 +28,7 @@ import torch
 from infravision.config import ROOT, load_config, merge
 from infravision.data.pop import POP_ROOT
 from infravision.io import ThermalImageError, list_images, read_rgb, read_thermal, save_rgb
+from infravision.fusion import draw_detections
 from infravision.pipeline import Pipeline
 
 POP_TEST = POP_ROOT / "test" / "JPEGImages"
@@ -76,6 +79,7 @@ VIEWS = {"AI colour on thermal detail": "luma", "Thermal palette (inferno)": "pa
          "Raw AI colorizer output": "ai"}
 # Local contrast (CLAHE) on the super-resolved frame; strong settings also amplify foliage texture.
 CONTRAST = {"Off": 0.0, "Mild": 1.0, "Medium": 1.5, "Strong": 2.5}
+VIDEO_MODES = ["Detection only (fast, boxes on the thermal frame)", "Full pipeline (all stages, ~2 s per frame)"]
 TILES = {"Off (whole frame)": 0, "2 x 2 tiles": 2, "3 x 3 tiles (small people)": 3}
 
 
@@ -104,7 +108,10 @@ class Pipelines:
     def run(self, path, colorizer, sr, conf, tiles, hotspot, black_hot=False, view=None, contrast=None):
         p = self.get(colorizer, sr)
         # Models were trained on white-hot frames (warm = bright); black-hot footage is flipped first.
-        image = 255 - read_thermal(path)[0] if black_hot else path
+        if isinstance(path, np.ndarray):
+            image = 255 - path if black_hot else path
+        else:
+            image = 255 - read_thermal(path)[0] if black_hot else path
         with self.lock:
             p.detector.conf, p.detector.tile = float(conf), int(tiles)
             p.enhancer.post_cfg = {**p.cfg.get("color_post", {}), "hotspot_alpha": float(hotspot) / 100}
@@ -293,6 +300,71 @@ def build(pipes, default_colorizer="thermovision"):
                    f"Average {sum(r['total_ms'] for r in rows) / len(rows) / 1000:.1f} s per frame")
         return gallery, summary, [str(table), str(bundle)]
 
+    def detect_only(gray, s):
+        """Fast video mode: detector on the raw frame, boxes drawn on the thermal image."""
+        p = pipes.get(s["colorizer"], s["sr"])
+        if s["black_hot"]:
+            gray = 255 - gray
+        with pipes.lock:
+            p.detector.conf, p.detector.tile = s["conf"], s["tiles"]
+            d = p.detector(gray)
+        rgb = np.repeat(gray[..., None], 3, axis=2)
+        return draw_detections(rgb, d["boxes"], d["scores"], **p.cfg["fusion"]), int(len(d["scores"]))
+
+    def process_video(video, every_s, max_frames, mode, colorizer, sr, conf, tiles, hotspot, palette, view, contrast,
+                      progress=gr.Progress()):
+        if not video:
+            raise gr.Error("Upload a thermal video.")
+        s = settings_of(colorizer, sr, conf, tiles, hotspot, palette, view, contrast)
+        cap = cv2.VideoCapture(str(video))
+        if not cap.isOpened():
+            raise gr.Error("Could not open the video (try mp4 / avi / mov / webm).")
+        fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+        step = max(1, round(fps * float(every_s)))
+        max_frames = int(max_frames)
+        out = Path(tempfile.mkdtemp(prefix="infravision_video_"))
+        stem = Path(str(video)).stem
+        vid = out / f"{stem}_annotated.webm"   # VP8: plays in the browser without ffmpeg / H.264
+        writer, size, rows, i = None, None, [], 0
+        fast = mode == VIDEO_MODES[0]
+        while len(rows) < max_frames and cap.grab():
+            if i % step == 0:
+                ok, frame = cap.retrieve()
+                if not ok:
+                    break
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                if fast:
+                    img, count = detect_only(gray, s)
+                else:
+                    _, r = run_one(gray, s)
+                    img, count = r["fused"], r["detections"]["count"]
+                if writer is None:
+                    scale = min(1.0, 1280 / img.shape[1])
+                    size = (int(img.shape[1] * scale) // 2 * 2, int(img.shape[0] * scale) // 2 * 2)
+                    writer = cv2.VideoWriter(str(vid), cv2.VideoWriter_fourcc(*"VP80"),
+                                             min(10.0, max(1.0, 1.0 / float(every_s))), size)
+                writer.write(cv2.cvtColor(cv2.resize(img, size, interpolation=cv2.INTER_AREA), cv2.COLOR_RGB2BGR))
+                rows.append(dict(time_s=round(i / fps, 2), frame=i, people=count))
+                progress(len(rows) / max_frames, desc=f"{len(rows)} frames, last: {count} people")
+            i += 1
+        cap.release()
+        if writer is not None:
+            writer.release()
+        if not rows:
+            raise gr.Error("No frames could be read from the video.")
+        table = out / f"{stem}_people.csv"
+        with open(table, "w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=list(rows[0]))
+            w.writeheader()
+            w.writerows(rows)
+        peak = max(rows, key=lambda r: r["people"])
+        flagged = sum(1 for r in rows if r["people"])
+        summary = (f"### Up to {peak['people']} people at once (t = {peak['time_s']} s)\n\n"
+                   f"People seen in {flagged} of {len(rows)} sampled frames · one frame every "
+                   f"{float(every_s):g} s of video · {'detection only' if fast else 'full pipeline'}")
+        import pandas as pd
+        return str(vid), pd.DataFrame(rows), summary, [str(vid), str(table)]
+
     with gr.Blocks(title="InfraVision") as demo:
         gr.Markdown(
             "# InfraVision rescue dashboard\nThermal drone frames → super-resolution → colorization, with people "
@@ -344,6 +416,22 @@ def build(pipes, default_colorizer="thermovision"):
                     batch_gal = gr.Gallery(label="Overlays", columns=4, height=420)
                     batch_files = gr.File(label="Downloads: summary CSV · all overlays + reports (zip)",
                                           file_count="multiple")
+                with gr.Tab("Video"):
+                    with gr.Row():
+                        video_in = gr.Video(label="Thermal video (mp4 / avi / mov / webm)", sources=["upload"],
+                                            height=240)
+                        with gr.Column():
+                            every = gr.Slider(0.2, 10, value=1.0, step=0.2, label="Sample one frame every N seconds")
+                            max_frames = gr.Slider(5, 600, value=60, step=5, label="At most this many frames")
+                            vmode = gr.Radio(VIDEO_MODES, value=VIDEO_MODES[0], label="Mode")
+                            video_btn = gr.Button("Run on video", variant="primary")
+                    video_sum = gr.Markdown()
+                    with gr.Row():
+                        video_out = gr.Video(label="Annotated video (sampled frames)", interactive=False, height=360)
+                        people_plot = gr.LinePlot(x="time_s", y="people", title="People detected over time",
+                                                  x_title="video time (s)", y_title="people", height=360)
+                    video_files = gr.File(label="Downloads: annotated video (WebM) · per-frame CSV",
+                                          file_count="multiple")
         gr.Markdown("Colours are estimated by a model trained on LLVIP street scenes; they are not temperatures. "
                     "'AI colour on thermal detail' keeps the brightness of the thermal frame and takes only the "
                     "tint from the colorizer. Hotspots mark the warmest pixels of each frame (not only people).")
@@ -351,6 +439,8 @@ def build(pipes, default_colorizer="thermovision"):
         run_btn.click(process, [upload, pick, which] + controls,
                       [s1, s2, s3, s4, count, latency, quality, files, p_rgb])
         batch_btn.click(process_batch, [batch_in] + controls, [batch_gal, batch_sum, batch_files])
+        video_btn.click(process_video, [video_in, every, max_frames, vmode] + controls,
+                        [video_out, people_plot, video_sum, video_files])
     return demo
 
 
