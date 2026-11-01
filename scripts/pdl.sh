@@ -12,7 +12,9 @@ set -u
 # Stopping the script must stop its xargs workers too: run as its own process group (setsid)
 # and kill the whole group on exit or signal.
 if [ "$(ps -o pgid= $$ | tr -d ' ')" != "$$" ]; then exec setsid "$0" "$@"; fi
-trap 'trap - TERM EXIT; kill -- -$$ 2>/dev/null' INT TERM EXIT
+# On INT/TERM, stop the whole group (workers too). Not on a normal EXIT: that would kill the
+# script itself and turn a finished download into exit status 143.
+trap 'trap - INT TERM; kill -- -$$ 2>/dev/null' INT TERM
 TRIES=${PDL_TRIES:-60}; WAIT=${PDL_WAIT:-20}
 U=$1; OUT=$2; N=${3:-16}; CH=$(( ${4:-64} * 1048576 ))
 D=$OUT.chunks

@@ -81,7 +81,9 @@ if "cart" not in sets:
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     for line in p.stdout:
         print(line, end="", flush=True)
-    assert p.wait() == 0 and z.is_file(), "CART download failed (see above); rerun to resume it"
+    rc = p.wait()
+    complete = z.is_file() and not Path(str(z) + ".chunks").exists() and z.stat().st_size == 4287170398
+    assert complete, f"CART download incomplete (pdl.sh exit {rc}, see above); run the notebook again"
     h = hashlib.md5()
     with open(z, "rb") as f:
         for block in iter(lambda: f.read(1 << 24), b""):
