@@ -9,6 +9,10 @@
 #   A popular file hits Drive's "Quota exceeded" limit (every request gets the HTML page);
 #   wait it out with e.g. PDL_TRIES=100000 PDL_WAIT=300 and N=4, or download signed in (rclone).
 set -u
+# Stopping the script must stop its xargs workers too: run as its own process group (setsid)
+# and kill the whole group on exit or signal.
+if [ "$(ps -o pgid= $$ | tr -d ' ')" != "$$" ]; then exec setsid "$0" "$@"; fi
+trap 'trap - TERM EXIT; kill -- -$$ 2>/dev/null' INT TERM EXIT
 TRIES=${PDL_TRIES:-60}; WAIT=${PDL_WAIT:-20}
 U=$1; OUT=$2; N=${3:-16}; CH=$(( ${4:-64} * 1048576 ))
 D=$OUT.chunks

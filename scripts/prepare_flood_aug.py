@@ -8,12 +8,19 @@ from the ground around each person, plus ripple stripes and noise. The water pat
 than the box, blob-shaped, with a wavy, soft top edge, so the model cannot learn "a rectangle = a person".
 Labels are copied unchanged (the box still covers the whole person).
 
+C1 v2 (2026-11-01): every flooded frame also gets as many *empty* water blobs (decoys, same
+sizes, placed away from people, no label). Without them the model learned "blob = person"
+(24% of empty blobs detected). Decoy boxes are saved to flood_decoys.json so evaluation can
+measure how often an empty blob is detected (gate: < 2%).
+
 Writes, inside human_detection/datasets/pop (from convert_pop.py):
   images/train/flood_<name>, labels/train/flood_<name>.txt   extra training frames
   images/test_flood, labels/test_flood, data_flood.yaml      flooded copy of the test split
+  flood_decoys.json                                         {split/image name: [[x0,y0,x1,y1], ...]} decoys
 Re-running replaces the earlier flood_ files. Seeded (seed 0).
 """
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -38,6 +45,30 @@ def read_boxes(label_path, w, h):
             boxes.append((round((xc - bw / 2) * w), round((yc - bh / 2) * h),
                           round((xc + bw / 2) * w), round((yc + bh / 2) * h)))
     return boxes
+
+
+def decoy_boxes(boxes, w, h, rng, tries=60):
+    """One empty box per person box: same size, clear of every person and other decoy."""
+    def grow(b, m):
+        return (b[0] - m, b[1] - m, b[2] + m, b[3] + m)
+
+    def hit(a, b):
+        return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+    taken = [grow(b, 2 * max(b[2] - b[0], b[3] - b[1])) for b in boxes]   # blob reach around people
+    out = []
+    for x0, y0, x1, y1 in boxes:
+        bw, bh = x1 - x0, y1 - y0
+        if bw < 2 or bh < 2 or bw >= w - 2 or bh >= h - 2:
+            continue
+        for _ in range(tries):
+            nx, ny = int(rng.integers(0, w - bw)), int(rng.integers(0, h - bh))
+            d = (nx, ny, nx + bw, ny + bh)
+            if not any(hit(grow(d, max(bw, bh)), t) for t in taken):
+                out.append(d)
+                taken.append(grow(d, max(bw, bh)))
+                break
+    return out
 
 
 def flood(gray, boxes, rng):
@@ -100,22 +131,25 @@ def write_split(names, src_split, dst_split, prefix, rng):
         boxes = read_boxes(lbl_path, gray.shape[1], gray.shape[0])
         if not boxes:
             continue
-        cv2.imwrite(str(img_dst / (prefix + name)), flood(gray, boxes, rng), [cv2.IMWRITE_JPEG_QUALITY, 95])
+        decoys = decoy_boxes(boxes, gray.shape[1], gray.shape[0], rng)
+        cv2.imwrite(str(img_dst / (prefix + name)), flood(gray, boxes + decoys, rng), [cv2.IMWRITE_JPEG_QUALITY, 95])
         shutil.copyfile(lbl_path, lbl_dst / (prefix + Path(name).stem + ".txt"))
-        done.append((img_path, img_dst / (prefix + name), boxes))
+        done.append((img_path, img_dst / (prefix + name), boxes, decoys))
     return done
 
 
 def save_grid(samples, out, n=6, crop=256):
     """Before / after crops around a person, boxes drawn in green."""
     tiles = []
-    for before, after, boxes in samples[:n]:
+    for before, after, boxes, decoys in samples[:n]:
         pair = []
-        x0, y0, x1, y1 = boxes[0]
+        x0, y0, x1, y1 = (decoys or boxes)[0]
         for path in (before, after):
             img = cv2.imread(str(path), cv2.IMREAD_COLOR)
             for b in boxes:
                 cv2.rectangle(img, b[:2], b[2:], (0, 255, 0), 1)
+            for b in decoys:
+                cv2.rectangle(img, b[:2], b[2:], (0, 0, 255), 1)
             h, w = img.shape[:2]
             cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
             cx0, cy0 = min(max(0, cx - crop // 2), w - crop), min(max(0, cy - crop // 2), h - crop)
@@ -123,7 +157,7 @@ def save_grid(samples, out, n=6, crop=256):
         tiles.append(np.hstack(pair))
     out.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(out), np.vstack(tiles))
-    print("Grid (left = original, right = flooded):", out)
+    print("Grid (left = original, right = flooded; green = person, red = empty decoy blob):", out)
 
 
 def main(argv=None):
@@ -149,6 +183,13 @@ def main(argv=None):
     (POP / "data_flood.yaml").write_text(
         f"path: {POP}\ntrain: images/train\nval: images/val\ntest: images/test_flood\n\nnames:\n  0: person\n")
     print(f"test_flood: {len(te)} flooded test frames; evaluate with data_flood.yaml, split=test")
+
+    decoys = {f"{split}/{after.name}": d for split, rows in (("train", tr), ("test_flood", te))
+              for _, after, _, d in rows}
+    (POP / "flood_decoys.json").write_text(json.dumps(decoys))
+    n_dec = sum(len(d) for d in decoys.values())
+    n_box = sum(len(b) for rows in (tr, te) for _, _, b, _ in rows)
+    print(f"decoys: {n_dec} empty blobs for {n_box} flooded people -> {POP / 'flood_decoys.json'}")
 
     save_grid(tr[::max(1, len(tr) // 6)], Path(args.grid))
 

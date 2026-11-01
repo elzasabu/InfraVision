@@ -1,0 +1,13 @@
+{
+  "decoys": 1840,
+  "decoys_detected": 493,
+  "decoy_rate": 0.26793478260869563,
+  "people": 1840,
+  "people_found": 1808,
+  "person_recall": 0.9826086956521739,
+  "images": 900,
+  "conf": 0.25,
+  "imgsz": 1024,
+  "gate_pass": false,
+  "weights": "checkpoints/yolo/best.pt"
+}

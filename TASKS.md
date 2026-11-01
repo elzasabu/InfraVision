@@ -34,14 +34,20 @@ All training runs on Kaggle (free GPU, about 30 GPU hours a week **per account**
 
 The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` after each run.
 
-## Where we are (2026-11-01, end of session)
+## Where we are (2026-11-01, 11:00)
+
+- **Next step = U9** (train detector v2 on Kaggle with `human_detection/sar_yolo.zip`). Everything for it is built and dry-run tested.
+- **WiSARD full** downloaded (browser; Drive's anonymous quota blocks scripted downloads) → `datasets/WiSARD/WiSARDv1_1.zip` (43.5 GB). Thermal folders extracted to `datasets/WiSARD/WiSARDv1/` (41 IR sequences, 35 labelled, 24k frames, 27.5k person boxes, all 640x512 grey; top-down **and oblique**). No water scenes.
+- **Baselines of the current detector** (`checkpoints/yolo/best.pt`): AIResQ (all 1988 frames) mAP50 **0.089 @640**; empty flood blobs detected **26.8%** (`results/flood_decoys_baseline.json`).
+
+### Earlier (2026-11-01, night)
 
 - **Detection** (YOLO, `checkpoints/yolo/best.pt`): POP test mAP50 0.630. On new footage it drops: WiSARD IR sample 0.435. Real test (other machine): cliff/woods frame good (9 boxes on ~7 people, some double counts); **people in water, side angle: 0 found**.
 - **Biggest gap = water / flood people.** No public thermal aerial dataset of people in water exists (searched). Plan: (1) dataset request email to the IWT-YOLO authors (Sensors 2024, 24(11) 3321, hejicker@163.com; draft was written, user sends from uni mail + CC supervisor); (2) user collects thermal water-rescue clips (U8), Claude extracts frames + pre-labels (C9); (3) C1 v2 + real-water copy-paste augmentation.
 - **Colorizer v1** installed: works, but dark "night photo" look (LLVIP is night-only, memorised ~18 street cameras). Fix later with daytime aerial pairs (WiSARD). Cosmetic, lowest priority.
 - **EDSR v3 installed** (`checkpoints/sr/edsr_best.pth`, also in the external-drive weights zip): POP val 46.02 dB vs bicubic 43.02. On 30 full POP test frames it wins 30/30 on degraded (blur/noise/JPEG) input but **loses on a clean x2 downscale (44.40 vs 47.71 dB)**: it over-smooths. Details in `docs/RESULTS.md`. EDSR costs **61 s per full POP frame on CPU**, so the GUI default stays bicubic; EDSR stays selectable.
 - **GUI** (`app.py`): bicubic default, new black-hot/white-hot palette switch. Weights zip for other machines: `/run/media/advaithmanoj/SharedData/Projects/Infravision/Data/infravision_weights.zip` (unzip inside the cloned `InfraVision/`). Holds YOLO, colorizer and EDSR v3.
-- **Downloads:** slow servers (Zenodo ~0.36 MB/s per connection) → `scripts/pdl.sh URL OUT 16` (parallel ranges, ~9x faster). The user's internet may be phone tethering (data cap!).
+- **Downloads:** slow servers (Zenodo ~0.36 MB/s per connection) → `scripts/pdl.sh URL OUT 16` (parallel ranges, chunk-verified, resumable). Google Drive: popular files hit "Quota exceeded" for anonymous/scripted downloads; download in the signed-in browser instead.
 
 ## User tasks
 
@@ -81,7 +87,14 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   2. New notebook → File → Import Notebook → `colab_training/train_sr_kaggle.ipynb`. Add Input → that dataset. GPU T4, Internet on.
   3. Save Version → Save & Run All (Commit).
   4. Output tab → `edsr_pop.zip` → copy `edsr_best.pth` to `InfraVision/checkpoints/sr/edsr_best.pth`. The last cell says whether it beats bicubic. If it doesn't, set `sr.backend: bicubic`.
-- [ ] **U7: disaster datasets** (replaces U3)
+- [ ] **U9: train detector v2 on Kaggle (POP + flood v2 + AIResQ + WiSARD)**: do this next
+  1. Kaggle → Datasets → New Dataset → upload `InfraVision/human_detection/sar_yolo.zip` (1.93 GB, private).
+  2. Code → New Notebook → File → Import Notebook → `colab_training/train_sar_yolo_kaggle.ipynb`. Add Input → that dataset. Accelerator GPU T4 x2, Internet On.
+  3. Save Version → Save & Run All (Commit). ~3–4 h (30 epochs max, early stop).
+  4. Output tab → `sar_1024.zip` → put it in `datasets/outputs/`. Claude installs it as `checkpoints/yolo/sar_v2.pt` (the old `best.pt` stays) and compares.
+  - The notebook prints before/after mAP50 on test_pop, test_flood, test_airesq, test_wisard and the empty-blob rate (gate < 2%).
+- [x] **U7: disaster datasets** (replaces U3)
+  - Done 2026-11-01: WiSARD full (browser download) + AIResQ benchmark; both in `sar_yolo.zip`. HIT-UAV not needed for now.
   - HIT-UAV (thermal drone, person boxes, CC BY 4.0): `git clone https://github.com/suojiashun/HIT-UAV-Infrared-Thermal-Dataset` into `datasets/HIT-UAV/`.
   - WiSARD (wilderness SAR, thermal + RGB, MIT-style licence), from sites.google.com/uw.edu/wisard: first the **971.6 MB Multi Modal Sample** into `datasets/WiSARD/`. Only get the 40.5 GB full set if the sample shows a clear gain.
   - Then hand C8 to Claude.
@@ -118,11 +131,13 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   - Done 2026-10-31: `infravision/train/thermovision.py` (ImageNet ResNet34 encoder, L1 + edge + VGG + Cb/Cr chroma, logs val saturation), `scripts/pack_llvip.py`, Kaggle notebook. Smoke-tested, with a test. Training itself = U5.
   - Add ThermoVision U-Net training (L1 + edge + VGG + Lab-chroma losses) to `infravision/train/colorizer.py`, plus a Kaggle notebook.
 - [ ] **C1 v2: fix the flood shortcut** (found 2026-10-31)
+  - Data done 2026-11-01: `prepare_flood_aug.py` adds one empty decoy blob per flooded person (7343 decoys), saved in `flood_decoys.json`; `scripts/eval_flood_decoys.py` measures the rate (current model 26.8%, gate < 2%). Retrain = U9.
   - Add the same number of empty water blobs (no person) to every flooded copy, train and test, so a blob no longer means "person". Rebuild the zip; then one more YOLO run on Kaggle. Gate: empty blobs detected < 2%, and the flood test score drops to a believable value.
 - [ ] **C6: detection evaluation** (needs U1)
   - Sweep imgsz, tiling (`detection.tile`) and TTA on POP val, then pick the best.
   - Report test-set P / R / mAP@0.5 to `results/detection_upgrade.json` and update `docs/RESULTS.md`.
 - [ ] **C8: disaster datasets → YOLO + eval** (needs U7)
+  - 2026-11-01: `human_detection/datasets/make_sar_zip.py` builds `sar_yolo.zip`: POP (every 2nd frame) + flood v2, AIResQ split by flight (4 test / 2 val / 11 train flights; train adds 2x2 tiles since people are 7x9 px), WiSARD split by sequence (test: MtErie_IR_0004, Karen_FLIR_IR_5, FHL_IR_0567, Airfield_FLIR_IR_2; val: Carnation_FLIR_IR_2, FHL_IR_0406). `train.txt` 11.6k balanced entries, `train_all.txt` 15.2k. Notebook `colab_training/train_sar_yolo_kaggle.ipynb` dry-run tested end to end on CPU. Left: install + evaluate the U9 result.
   - Partial 2026-11-01: WiSARD IR sample (264 frames) mAP50 0.435 @640 / 0.411 @1024 → `results/disaster_eval.json`. **AIResQ eval was running when the session ended; rerun:** `ultralytics val` of `checkpoints/yolo/best.pt` on `datasets/AIResQ/Benchmark` (data yaml: path=that folder, train/val=images, names {0: person}; imgsz 640 and 1024) and add it to `disaster_eval.json`.
   - Converters for HIT-UAV and WiSARD into YOLO format (person only, full resolution), plus WiSARD thermal/RGB pairs for the colorizer.
   - Evaluate the POP YOLO on POP test, `test_flood`, HIT-UAV and WiSARD → `results/disaster_eval.json`. Then a combined Kaggle fine-tune.

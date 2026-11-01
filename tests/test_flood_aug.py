@@ -25,3 +25,15 @@ def test_flood_covers_lower_part_of_warm_person():
     assert out[125:140, 95:105].mean() < 120                    # feet under cool water
     assert out[60:70, 95:105].mean() > 200                      # head still warm
     assert np.array_equal(out[:, :20], img[:, :20])             # far away untouched
+
+
+def test_decoys_same_size_and_clear_of_people():
+    rng = np.random.default_rng(0)
+    boxes = [(100, 100, 120, 150), (400, 300, 430, 360)]
+    dec = flood_aug.decoy_boxes(boxes, 640, 512, rng)
+    assert len(dec) == 2
+    for (x0, y0, x1, y1), (a0, b0, a1, b1) in zip(boxes, dec):
+        assert (x1 - x0, y1 - y0) == (a1 - a0, b1 - b0)               # same size as its person
+        assert 0 <= a0 and a1 <= 640 and 0 <= b0 and b1 <= 512
+        for p in boxes:                                               # no overlap with any person
+            assert a1 <= p[0] or p[2] <= a0 or b1 <= p[1] or p[3] <= b0
