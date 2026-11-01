@@ -45,7 +45,10 @@ export -f chunk; export U OUT SIZE CH D TRIES WAIT
     k=$(ls "$D" 2>/dev/null | grep -c '\.ok$'); el=$(( $(date +%s) - t0 ))
     echo "$(date +%T) $k/$NC chunks, $(( k * CH / 1048576 / (el + 1) )) MB/s avg"
   done ) & MON=$!
-seq 0 $((NC - 1)) | xargs -P "$N" -I{} bash -c 'chunk {}'
+# In the background + wait: bash runs the INT/TERM trap only between commands, so a
+# foreground xargs would keep its workers alive after the script is told to stop.
+seq 0 $((NC - 1)) | xargs -P "$N" -I{} bash -c 'chunk {}' &
+wait $!
 kill $MON 2>/dev/null
 
 k=$(ls "$D" | grep -c '\.ok$')
