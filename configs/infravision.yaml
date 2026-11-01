@@ -92,7 +92,8 @@ detection:
   near_imgsz: 640
   near_min_height: 0.08
   weights:
-    - checkpoints/yolo/best.pt
+    - checkpoints/yolo/sar_v2.pt      # detector v2 (U9): POP + flood v2 + AIResQ + WiSARD
+    - checkpoints/yolo/best.pt        # POP-only model (U1)
     - human_detection/runs/pop/pop_1024/weights/best.pt
     - human_detection/runs/pop/baseline/weights/best.pt
     - human_detection/runs/thermal/colab_resumed/weights/best.pt

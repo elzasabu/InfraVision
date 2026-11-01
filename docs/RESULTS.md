@@ -33,6 +33,30 @@ which confirms small objects are the problem, but the real fix is training on
 POP. The config keeps imgsz 1024 and no tiling until the POP model exists;
 re-run the size/tiling sweep then, since tiling may help it more.
 
+## Detection v2: POP + flood v2 + AIResQ + WiSARD (Kaggle U9, 2026-11-01)
+
+`checkpoints/yolo/sar_v2.pt`, fine-tuned from the POP model on 11.6k frames
+(`human_detection/sar_yolo.zip`, `colab_training/train_sar_yolo_kaggle.ipynb`). Test sets are
+flights / sequences never used for training. mAP@0.5 from the notebook (`results/detection_sar_v2_eval.json`):
+
+| test set | POP model (before) | **v2** |
+|---|---|---|
+| POP test (900 frames) @1024 | 0.620 | 0.614 |
+| POP test, synthetic flood @1024 | 0.975 | 0.955 |
+| AIResQ, 4 held-out flights (468) @640 / @1024 | 0.041 / 0.147 | **0.325 / 0.396** |
+| WiSARD, 4 held-out sequences (2547) @640 / @1024 | 0.224 / 0.268 | **0.469 / 0.630** |
+| empty water blobs detected as people (conf 0.25) | 26.8% | **2.7%** (gate < 2%) |
+
+- POP stays level while the new domains improve 2.4-2.7x; the flood shortcut is almost gone.
+- Training stopped at epoch 10 with the best val epoch = 2: val was ~80% POP frames, so model
+  selection followed POP. v3 uses a balanced val (every 4th POP val frame) and a gentler fine-tune
+  (SGD lr 0.002, cosine).
+- Large, close, oblique people (low drone, 150-300 px tall) are still missed (1 of 4 on a test
+  frame; stock COCO YOLO finds 4/4). The dashboard therefore adds the COCO model for large boxes
+  only (`detection.near_weights`): 4/4 on that frame, no change on POP / HIT-UAV / RGBT (A/B on
+  100-150 frames each). v3 adds LLVIP persons to train it in.
+- New thermal sets, current (POP) model: HIT-UAV test 0.262, RGBTDronePerson val 0.055 @640 / 0.076 @1024.
+
 ## Super-resolution: EDSR x2 on POP (primary dataset)
 
 100 fixed 192x192 crops from POP val (F13-F16), degraded with the training

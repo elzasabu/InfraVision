@@ -105,9 +105,10 @@ class Packer:
         self.steps, self.seen = steps or {}, {}
 
     def add(self, split, name, rows, src=None, data=None, kind="other"):
-        if split == "train":
-            self.seen[kind] = self.seen.get(kind, 0) + 1
-            if self.seen[kind] % self.steps.get(kind, 1):
+        if split in ("train", "val"):
+            key = kind if split == "train" else f"val_{kind}"     # e.g. --steps val_pop=4 balances val
+            self.seen[key] = self.seen.get(key, 0) + 1
+            if self.seen[key] % self.steps.get(key, 1):
                 return
         stem = Path(name).stem
         if src is not None:

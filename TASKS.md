@@ -90,15 +90,17 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   2. New notebook → File → Import Notebook → `colab_training/train_sr_kaggle.ipynb`. Add Input → that dataset. GPU T4, Internet on.
   3. Save Version → Save & Run All (Commit).
   4. Output tab → `edsr_pop.zip` → copy `edsr_best.pth` to `InfraVision/checkpoints/sr/edsr_best.pth`. The last cell says whether it beats bicubic. If it doesn't, set `sr.backend: bicubic`.
-- [ ] **U9: train detector v2 on Kaggle (POP + flood v2 + AIResQ + WiSARD)**: do this next
+- [x] **U9: train detector v2 on Kaggle (POP + flood v2 + AIResQ + WiSARD)**
+  - Done 2026-11-01: installed `checkpoints/yolo/sar_v2.pt` (now first in `detection.weights`). Test mAP50 POP 0.620 → 0.614, AIResQ 0.147 → 0.396, WiSARD 0.268 → 0.630, empty flood blobs 26.8% → 2.7%. Best val epoch 2 (POP-heavy val), early stop at 10. Details in `docs/RESULTS.md`.
   1. Kaggle → Datasets → New Dataset → upload `InfraVision/human_detection/sar_yolo.zip` (1.93 GB, private).
   2. Code → New Notebook → File → Import Notebook → `colab_training/train_sar_yolo_kaggle.ipynb`. Add Input → that dataset. Accelerator GPU T4 x2, Internet On.
   3. Save Version → Save & Run All (Commit). ~3–4 h (30 epochs max, early stop).
   4. Output tab → `sar_1024.zip` → put it in `datasets/outputs/`. Claude installs it as `checkpoints/yolo/sar_v2.pt` (the old `best.pt` stays) and compares.
   - The notebook prints before/after mAP50 on test_pop, test_flood, test_airesq, test_wisard and the empty-blob rate (gate < 2%).
 - [ ] **U10: train detector v3 on Kaggle** (after U9 finishes)
-  1. Put U9's `sar_1024.zip` in `datasets/outputs/`. Claude runs `scripts/install_detector.py ../datasets/outputs/sar_1024.zip --name sar_v2 --sweep` → installs `checkpoints/yolo/sar_v2.pt` (old `best.pt` kept), prints before/after, writes `human_detection/sar_v2_start/start.pt`.
-  2. Kaggle → two private datasets: `human_detection/sar_v3_yolo.zip` (2.0 GB) and the folder with `start.pt` (19 MB).
+  0. Ready 2026-11-01: `start.pt` = v2 at `human_detection/sar_v2_start/start.pt`; zip rebuilt with balanced val (every 4th POP val frame: 1372 val) and the notebook fine-tunes with SGD lr 0.002 cosine, patience 8.
+  1. (done) Put U9's `sar_1024.zip` in `datasets/outputs/`. Claude runs `scripts/install_detector.py ../datasets/outputs/sar_1024.zip --name sar_v2 --sweep` → installs `checkpoints/yolo/sar_v2.pt` (old `best.pt` kept), prints before/after, writes `human_detection/sar_v2_start/start.pt`.
+  2. Kaggle → two private datasets: `human_detection/sar_v3_yolo.zip` (1.86 GB) and `human_detection/sar_v2_start/start.pt` (19 MB).
   3. Import `colab_training/train_sar_v3_yolo_kaggle.ipynb`, Add Input → both, GPU T4 x2, Internet On, Save & Run All.
   4. The log prints min/epoch and an ETA after every epoch. Output `sar_v3.zip` → `datasets/outputs/`.
   - Data: POP (every 3rd) + flood v2, AIResQ, WiSARD, **RGBTDronePerson** (every 3rd), **HIT-UAV** and **LLVIP persons** (every 8th; large close oblique people): 12.2k train frames; 7 test sets incl. `test_llvip`. 4 data workers, batch 16, 20 epochs, patience 6. Dry-run tested on CPU (before LLVIP was added; same code path).

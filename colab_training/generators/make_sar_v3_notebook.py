@@ -73,7 +73,7 @@ RUN_DIR = RUNS_DIR / RUN_NAME
 
 IMGSZ = 1024     # small people stay visible
 EPOCHS = 20      # fine-tune from detector v2
-PATIENCE = 6
+PATIENCE = 8
 WORKERS = 4      # Kaggle has 4 CPU cores; v2 used 2 and was data-loading bound (1.5 it/s)
 BATCH = 16       # v2 used 4.9 GB of 15 GB at batch 8
 
@@ -141,7 +141,7 @@ md("""
 ## 6. Train
 
 12.2k training images. The health check prints the measured time per epoch and an ETA after every epoch.
-Stops early when val mAP stops improving for 6 epochs.
+Stops early when val mAP stops improving for 8 epochs (val is balanced across sources).
 Health check after every epoch: stops if the loss turns NaN, or val mAP50 is under 0.3 at epoch 3
 (the starting model is already well above that).
 """)
@@ -177,7 +177,9 @@ else:
     model.train(data=str(DATA_YAML), imgsz=IMGSZ, epochs=EPOCHS, patience=PATIENCE, batch=BATCH, device=0,
                 workers=WORKERS, project=str(RUNS_DIR), name=RUN_NAME, exist_ok=True, seed=0,
                 flipud=0.5,      # top-down drone view: vertical flips are realistic
-                mosaic=1.0, scale=0.5)
+                mosaic=1.0, scale=0.5,
+                # Fine-tune gently: v2 used the automatic SGD lr 0.01 and peaked at epoch 2.
+                optimizer="SGD", lr0=0.002, lrf=0.1, cos_lr=True, warmup_epochs=1)
 """)
 md("## 7. After: every test set, compared with before")
 code("""

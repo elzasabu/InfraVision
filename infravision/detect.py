@@ -86,7 +86,19 @@ class Detector:
             ns = r.boxes.conf.cpu().numpy().astype(np.float32)
             big = (nb[:, 3] - nb[:, 1]) >= self.near_min_height * h
             if big.any():
-                boxes = np.concatenate([boxes.reshape(-1, 4), nb[big]])
+                boxes = boxes.reshape(-1, 4)
+                # A small SAR box mostly inside a much larger near-person box is a body part
+                # (hand, head) of that person, not a second person.
+                if len(boxes):
+                    nbb = nb[big]
+                    ix = np.clip(np.minimum(boxes[:, None, 2], nbb[None, :, 2]) - np.maximum(boxes[:, None, 0], nbb[None, :, 0]), 0, None)
+                    iy = np.clip(np.minimum(boxes[:, None, 3], nbb[None, :, 3]) - np.maximum(boxes[:, None, 1], nbb[None, :, 1]), 0, None)
+                    area = lambda z: (z[:, 2] - z[:, 0]) * (z[:, 3] - z[:, 1])
+                    inside = ix * iy / np.maximum(area(boxes)[:, None], 1e-6) > 0.7
+                    smaller = area(boxes)[:, None] < 0.25 * area(nbb)[None, :]
+                    part = (inside & smaller).any(1)
+                    boxes, scores = boxes[~part], scores[~part]
+                boxes = np.concatenate([boxes, nb[big]])
                 scores = np.concatenate([scores, ns[big]])
                 keep = nms(torch.from_numpy(boxes), torch.from_numpy(scores), self.iou).numpy()
                 boxes, scores = boxes[keep], scores[keep]
