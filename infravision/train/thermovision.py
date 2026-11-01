@@ -3,6 +3,8 @@
     python scripts/pack_llvip.py                                     # laptop: datasets/LLVIP -> llvip_colorizer.zip
     python -m infravision.train.thermovision --data <llvip dir> --amp --resume
     python -m infravision.train.thermovision --smoke --device cpu    # 2 tiny epochs
+    # several paired sets, sampled by weight, best checkpoint by the first set's val PSNR:
+    python -m infravision.train.thermovision --data cart=/d/cart:3 kaist=/d/kaist:1 --gan_weight 0.01
 
 `--data` takes either the packed zip layout ({train,test}/{ir,rgb}/x.jpg) or the
 original LLVIP layout ({infrared,visible}/{train,test}/x.jpg).
@@ -16,6 +18,10 @@ images (frozen ImageNet statistics include near-zero variances that blow small w
 changes up past the fp16 range).
 Writes <out>/thermovision_best.pth (loadable by infravision.colorizer) and
 metrics.json; val saturation is logged next to PSNR / SSIM.
+
+`--gan_weight` > 0 adds a conditional PatchGAN (LSGAN, spectral norm) from epoch `--gan_start`:
+plain L1 regression averages plausible colours into grey-brown; the discriminator pushes the
+output towards realistic colour statistics (pix2pix: L1 + ~0.01 adversarial).
 """
 import argparse
 import math
@@ -26,7 +32,7 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from torchvision.utils import save_image
 
 from ..config import find_dir, load_config
@@ -80,6 +86,35 @@ class LLVIPColor(Dataset):
                 torch.from_numpy(v).float().div_(255).permute(2, 0, 1))
 
 
+def parse_sources(specs):
+    """["cart=/d/cart:3", "/d/llvip"] -> [(name, path, weight)]. Plain path = weight 1."""
+    out = []
+    for i, s in enumerate(specs):
+        name, _, rest = s.rpartition("=") if "=" in s.split("/")[0] else ("", "", s)
+        path, w = rest, 1.0
+        if ":" in rest and rest.rsplit(":", 1)[1].replace(".", "", 1).isdigit():
+            path, w = rest.rsplit(":", 1)[0], float(rest.rsplit(":", 1)[1])
+        out.append((name or Path(path).name or f"set{i}", path, w))
+    return out
+
+
+class PatchD(torch.nn.Module):
+    """Conditional PatchGAN on (thermal, RGB): 70x70 receptive field, spectral norm, no BatchNorm."""
+
+    def __init__(self, ch=64):
+        super().__init__()
+        sn = torch.nn.utils.spectral_norm
+        layers, c_in = [], 4
+        for i, c in enumerate((ch, ch * 2, ch * 4, ch * 8)):
+            layers += [sn(torch.nn.Conv2d(c_in, c, 4, 2 if i < 3 else 1, 1)), torch.nn.LeakyReLU(0.2, True)]
+            c_in = c
+        layers.append(sn(torch.nn.Conv2d(c_in, 1, 4, 1, 1)))
+        self.net = torch.nn.Sequential(*layers)
+
+    def forward(self, t, rgb):
+        return self.net(torch.cat([t * 2 - 1, rgb * 2 - 1], 1))
+
+
 def build_model(pretrained=True):
     m = ThermoVisionUNet()
     if pretrained:
@@ -121,7 +156,13 @@ def saturation(x):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--data", default=None, help="LLVIP folder (default: configs datasets.llvip)")
+    p.add_argument("--data", nargs="+", default=None,
+                   help="paired folders ({train,test}/{ir,rgb}), optionally name=path:weight; the first is the "
+                        "primary set (best checkpoint by its val PSNR). Default: configs datasets.llvip")
+    p.add_argument("--gan_weight", type=float, default=0.0, help="conditional PatchGAN loss weight (0 = off)")
+    p.add_argument("--gan_start", type=int, default=2, help="first epoch with the GAN loss")
+    p.add_argument("--init", default="", help="start G from these weights (e.g. colorizer v2 for a fine-tune); "
+                                             "not a resume: optimiser and epochs start fresh")
     p.add_argument("--epochs", type=int, default=30)
     p.add_argument("--batch", type=int, default=16)
     p.add_argument("--size", type=int, default=256, help="model input side (multiple of 32)")
@@ -131,7 +172,7 @@ def main(argv=None):
     p.add_argument("--chroma_weight", type=float, default=1.0)
     p.add_argument("--no_pretrained", action="store_true", help="encoder from scratch (no ImageNet download)")
     p.add_argument("--max_train", type=int, default=0)
-    p.add_argument("--max_val", type=int, default=500, help="evenly spaced LLVIP test pairs scored each epoch")
+    p.add_argument("--max_val", type=int, default=500, help="evenly spaced test pairs per set scored each epoch")
     p.add_argument("--steps_per_epoch", type=int, default=0, help="0 = full pass")
     add_common_args(p, CHECKPOINTS / "colorizer")
     args = p.parse_args(argv)
@@ -141,24 +182,49 @@ def main(argv=None):
     device, amp, out = setup(args)
     random.seed(args.seed)
 
-    data = args.data or find_dir(load_config()["datasets"]["llvip"])
-    if data is None:
-        raise SystemExit("LLVIP not found: pass --data or set datasets.llvip in configs/infravision.yaml")
-    train_pairs, val_pairs = llvip_pairs(data, "train"), llvip_pairs(data, "test")
-    random.Random(args.seed).shuffle(train_pairs)
-    if args.max_train:
-        train_pairs = train_pairs[: args.max_train]
-    val_pairs = val_pairs[:: max(1, len(val_pairs) // args.max_val)][: args.max_val]
-    print(f"data {data}: train pairs {len(train_pairs)}, val pairs {len(val_pairs)}")
+    if args.data:
+        sources = parse_sources(args.data)
+    else:
+        d = find_dir(load_config()["datasets"]["llvip"])
+        if d is None:
+            raise SystemExit("LLVIP not found: pass --data or set datasets.llvip in configs/infravision.yaml")
+        sources = [("llvip", str(d), 1.0)]
+    train_pairs, weights, vls = [], [], {}
+    for name, path, w in sources:
+        tr, va = llvip_pairs(path, "train"), llvip_pairs(path, "test")
+        if not tr:
+            raise SystemExit(f"{name}: no train pairs in {path}")
+        random.Random(args.seed).shuffle(tr)
+        if args.max_train:
+            tr = tr[: args.max_train]
+        va = va[:: max(1, len(va) // args.max_val)][: args.max_val]
+        train_pairs += tr
+        weights += [w / len(tr)] * len(tr)          # each set gets `w` share of the samples
+        if va:
+            vls[name] = DataLoader(LLVIPColor(va, args.size, False), args.batch, shuffle=False,
+                                   num_workers=args.workers)
+        print(f"{name}: {path}: train pairs {len(tr)} (sampling weight {w}), val pairs {len(va)}")
+    primary = sources[0][0]
+    if primary not in vls:
+        raise SystemExit(f"primary set {primary} has no test pairs")
+    n_draw = args.steps_per_epoch * args.batch if args.steps_per_epoch else len(train_pairs)
+    sampler = WeightedRandomSampler(torch.tensor(weights, dtype=torch.double), n_draw, replacement=True,
+                                    generator=torch.Generator().manual_seed(args.seed))
+    tl = DataLoader(LLVIPColor(train_pairs, args.size, True), args.batch, sampler=sampler,
+                    num_workers=args.workers, drop_last=True, persistent_workers=args.workers > 0)
 
-    tl = DataLoader(LLVIPColor(train_pairs, args.size, True), args.batch, shuffle=True, num_workers=args.workers,
-                    drop_last=True, persistent_workers=args.workers > 0)
-    vl = DataLoader(LLVIPColor(val_pairs, args.size, False), args.batch, shuffle=False, num_workers=args.workers)
-
-    G = build_model(not args.no_pretrained).to(device)
+    G = build_model(not args.no_pretrained and not args.init).to(device)
+    if args.init:
+        from ..colorizer import load_thermovision
+        G.load_state_dict(load_thermovision(args.init, "cpu", verbose=True)[0].state_dict())
+        print("G initialised from", args.init)
     opt = torch.optim.AdamW(G.parameters(), lr=args.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(1, args.epochs))
     scaler = torch.amp.GradScaler(device.type, enabled=amp)
+    D = optD = None
+    if args.gan_weight > 0:
+        D = PatchD().to(device)
+        optD = torch.optim.Adam(D.parameters(), lr=args.lr, betas=(0.5, 0.999))
     perc = None
     if args.perceptual_weight > 0:
         try:
@@ -167,9 +233,10 @@ def main(argv=None):
             print(f"WARNING: VGG16 weights unavailable ({e.__class__.__name__}); perceptual loss disabled")
 
     meta = dict(model="ThermoVisionUNet", architecture="pretrained_unet", encoder="resnet34", input_size=args.size,
-                trained_on="LLVIP", perceptual=perc is not None)
+                trained_on="+".join(n for n, _, _ in sources), perceptual=perc is not None,
+                gan_weight=args.gan_weight)
     keeper = BestKeeper(out, "thermovision", "val_psnr", meta)
-    resumer = Resumer(out, keeper, args.resume, G=G, opt=opt, sched=sched, scaler=scaler)
+    resumer = Resumer(out, keeper, args.resume, G=G, opt=opt, sched=sched, scaler=scaler, D=D, optD=optD)
 
     watch = LossWatch()
     for epoch in range(resumer.start_epoch(), args.epochs + 1):
@@ -185,10 +252,20 @@ def main(argv=None):
             if perc is not None:
                 with autocast(device, amp):
                     loss = loss + args.perceptual_weight * perc(fake * 2 - 1, v * 2 - 1)
+            gan_on = D is not None and epoch >= args.gan_start
+            if gan_on:   # fp32 discriminator: small, and LSGAN in fp16 is touchy
+                g_adv = D(t, fake)
+                loss = loss + args.gan_weight * F.mse_loss(g_adv, torch.ones_like(g_adv))
             opt.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
             scaler.step(opt)
             scaler.update()
+            if gan_on:
+                d_real, d_fake = D(t, v), D(t, fake.detach())
+                d_loss = 0.5 * (F.mse_loss(d_real, torch.ones_like(d_real)) + F.mse_loss(d_fake, torch.zeros_like(d_fake)))
+                optD.zero_grad(set_to_none=True)
+                d_loss.backward()
+                optD.step()
             watch(loss.item())
             tot, n = tot + loss.item(), n + 1
             if step % 100 == 0:
@@ -198,25 +275,32 @@ def main(argv=None):
         sched.step()
 
         G.eval()
-        ps, ss, sat, sat_t, con, con_t = [], [], [], [], [], []
+        per = {}
         with torch.inference_mode():
-            for i, (t, v) in enumerate(vl):
-                with autocast(device, amp):
-                    pred = G(t.to(device))
-                pred = pred.float().cpu().clamp(0, 1)
-                ps.append(psnr(pred, v))
-                ss.append(ssim(pred, v))
-                sat.append(saturation(pred))
-                sat_t.append(saturation(v))
-                con.append(luma(pred).flatten(1).std(1))
-                con_t.append(luma(v).flatten(1).std(1))
-                if i == 0:
-                    save_image(torch.cat([t.repeat(1, 3, 1, 1), pred, v]), out / f"val_samples_epoch{epoch:03d}.png",
-                               nrow=t.shape[0])
-        m = dict(train_loss=tot / max(n, 1), val_psnr=torch.stack(ps).mean().item(),
-                 val_ssim=torch.stack(ss).mean().item(), val_saturation=torch.stack(sat).mean().item(),
-                 target_saturation=torch.stack(sat_t).mean().item(),
-                 contrast_ratio=(torch.cat(con).mean() / torch.cat(con_t).mean().clamp_min(1e-6)).item())
+            for name, vl in vls.items():
+                ps, ss, sat, sat_t, con, con_t = [], [], [], [], [], []
+                for i, (t, v) in enumerate(vl):
+                    with autocast(device, amp):
+                        pred = G(t.to(device))
+                    pred = pred.float().cpu().clamp(0, 1)
+                    ps.append(psnr(pred, v))
+                    ss.append(ssim(pred, v))
+                    sat.append(saturation(pred))
+                    sat_t.append(saturation(v))
+                    con.append(luma(pred).flatten(1).std(1))
+                    con_t.append(luma(v).flatten(1).std(1))
+                    if i == 0:
+                        save_image(torch.cat([t.repeat(1, 3, 1, 1), pred, v]),
+                                   out / f"val_samples_epoch{epoch:03d}_{name}.png", nrow=t.shape[0])
+                per[name] = dict(psnr=torch.stack(ps).mean().item(), ssim=torch.stack(ss).mean().item(),
+                                 saturation=torch.stack(sat).mean().item(),
+                                 target_saturation=torch.stack(sat_t).mean().item(),
+                                 contrast_ratio=(torch.cat(con).mean() / torch.cat(con_t).mean().clamp_min(1e-6)).item())
+        pm = per[primary]
+        m = dict(train_loss=tot / max(n, 1), val_psnr=pm["psnr"], val_ssim=pm["ssim"],
+                 val_saturation=pm["saturation"], target_saturation=pm["target_saturation"],
+                 contrast_ratio=pm["contrast_ratio"], primary=primary,
+                 per_set={k: {a: round(b, 4) for a, b in v.items()} for k, v in per.items()})
         if not math.isfinite(m["val_psnr"]):   # the model is poisoned; more epochs cannot fix it
             fail(f"epoch {epoch}: val PSNR is NaN/inf ({m})")
         # A flat, average-colour output (run 1) has ~0.17 of the photo's contrast; a learning model is past 0.5.
@@ -227,6 +311,9 @@ def main(argv=None):
               f"SSIM {m['val_ssim']:.4f} saturation {m['val_saturation']:.3f} (real {m['target_saturation']:.3f}) "
               f"contrast {m['contrast_ratio']:.2f}"
               + ("  *best*" if best else ""), flush=True)
+        if len(per) > 1:
+            print("   per set: " + " | ".join(f"{k} {v['psnr']:.2f} dB sat {v['saturation']:.3f}/{v['target_saturation']:.3f}"
+                                             for k, v in per.items()), flush=True)
         resumer.end_epoch(epoch, args.epochs)
     resumer.finish()
     print("Best:", keeper.best, "->", out / "thermovision_best.pth")

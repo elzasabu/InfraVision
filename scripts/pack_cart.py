@@ -74,6 +74,7 @@ def main():
     p.add_argument("--side", type=int, default=320)
     p.add_argument("--out", default=str(ROOT.parent / "datasets" / "cart_colorizer.zip"))
     p.add_argument("--check", default="", help="only write an alignment check image")
+    p.add_argument("--out_dir", default="", help="write a folder tree <out_dir>/cart/... instead of a zip (Kaggle)")
     a = p.parse_args()
     src = Path(a.src)
     if not (src / "color").is_dir():
@@ -85,7 +86,23 @@ def main():
         return
     test = split(by_flight)
     n = {"train": 0, "test": 0}
-    with zipfile.ZipFile(a.out, "w", zipfile.ZIP_STORED) as z:
+
+    class Dir:   # same writestr interface as ZipFile
+        def __init__(self, root):
+            self.root = Path(root)
+
+        def writestr(self, name, data):
+            f = self.root / name
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(data)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    with (Dir(a.out_dir) if a.out_dir else zipfile.ZipFile(a.out, "w", zipfile.ZIP_STORED)) as z:
         for f, frames in sorted(by_flight.items()):
             s = "test" if f in test else "train"
             for frame, tp, cp in frames:
@@ -98,7 +115,8 @@ def main():
                     z.writestr(f"cart/{s}/{kind}/{f}-{frame}.jpg", buf.tobytes())
                 n[s] += 1
     print(f"train {n['train']} pairs, test {n['test']} pairs ({len(test)} held-out flights: {sorted(test)})")
-    print(f"Wrote {a.out} ({Path(a.out).stat().st_size / 1e6:.0f} MB)")
+    print(f"Wrote {Path(a.out_dir) / 'cart' if a.out_dir else a.out}"
+          + ("" if a.out_dir else f" ({Path(a.out).stat().st_size / 1e6:.0f} MB)"))
 
 
 if __name__ == "__main__":

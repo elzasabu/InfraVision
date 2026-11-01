@@ -125,9 +125,11 @@ def load_thermovision(path, device="cpu", prefer_ema=True, verbose=True):
     model.to(device).eval()
 
     run = ck.get("run_args", {}) if isinstance(ck.get("run_args"), dict) else {}
+    meta = ck.get("meta") if isinstance(ck.get("meta"), dict) else {}
     info = dict(path=str(path), weights=which, step=ck.get("step"), epoch=ck.get("epoch"),
                 val_total=ck.get("val_total"), run_name=run.get("name"),
-                parameters=sum(p.numel() for p in model.parameters()))
+                parameters=sum(p.numel() for p in model.parameters()),
+                input_size=meta.get("input_size"), trained_on=meta.get("trained_on"))
     if verbose:
         when = ", ".join(f"{k} {info[k]}" for k in ("epoch", "step") if info[k] is not None) or "no epoch/step stored"
         print(f"Colorizer: loaded {short(path)} ({which} weights, run {info['run_name']}, {when}) on {device}")
@@ -146,6 +148,10 @@ class ColorizerAdapter:
         self.input_size = size
         self.model, self.info = load_thermovision(checkpoint, self.device, prefer_ema, verbose)
         self.path = Path(self.info["path"])
+        trained = self.info.get("input_size")
+        if trained and int(trained) % MULTIPLE == 0 and int(trained) != self.input_size:
+            # run at the size the checkpoint was trained at (stored by infravision.train.thermovision)
+            self.input_size = int(trained)
 
     @property
     def name(self):
