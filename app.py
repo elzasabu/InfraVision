@@ -70,6 +70,12 @@ COLORIZERS = {"ThermoVision U-Net (default)": "thermovision",
 SR_MODELS = {"Bicubic x2 (no model, fast)": "bicubic", "EDSR x2 (trained on POP, ~1 min/frame on CPU)": "edsr",
              "Off (1x, quickest on CPU)": "off"}
 PALETTES = ["White-hot (people bright)", "Black-hot (people dark)"]
+# Stage 3. The LLVIP colorizer alone gives a dark night-photo look, so by default its colour is
+# laid over the thermal detail (color_post.view: luma).
+VIEWS = {"AI colour on thermal detail": "luma", "Thermal palette (inferno)": "palette",
+         "Raw AI colorizer output": "ai"}
+# Local contrast (CLAHE) on the super-resolved frame; strong settings also amplify foliage texture.
+CONTRAST = {"Off": 0.0, "Mild": 1.0, "Medium": 1.5, "Strong": 2.5}
 TILES = {"Off (whole frame)": 0, "2 x 2 tiles": 2, "3 x 3 tiles (small people)": 3}
 
 
@@ -95,13 +101,18 @@ class Pipelines:
             self.cache[key] = Pipeline(self.config, over)
         return self.cache[key]
 
-    def run(self, path, colorizer, sr, conf, tiles, hotspot, black_hot=False):
+    def run(self, path, colorizer, sr, conf, tiles, hotspot, black_hot=False, view=None, contrast=None):
         p = self.get(colorizer, sr)
         # Models were trained on white-hot frames (warm = bright); black-hot footage is flipped first.
         image = 255 - read_thermal(path)[0] if black_hot else path
         with self.lock:
             p.detector.conf, p.detector.tile = float(conf), int(tiles)
             p.enhancer.post_cfg = {**p.cfg.get("color_post", {}), "hotspot_alpha": float(hotspot) / 100}
+            if view:
+                p.enhancer.post_cfg["view"] = view
+            if contrast is not None:
+                p.enhancer.pre_cfg = {**p.cfg["pre_enhance"], "clahe": contrast > 0,
+                                      "clahe_clip": contrast or p.cfg["pre_enhance"].get("clahe_clip", 1.5)}
             return p, p.run(image)
 
 
@@ -188,6 +199,10 @@ def build(pipes, default_colorizer="thermovision"):
     det_cfg, post_cfg = pipe.cfg["detection"], pipe.cfg.get("color_post", {})
     default_col = next((k for k, v in COLORIZERS.items() if v == default_colorizer), next(iter(COLORIZERS)))
     default_tiles = next((k for k, v in TILES.items() if v == int(det_cfg.get("tile", 0))), next(iter(TILES)))
+    default_view = next((k for k, v in VIEWS.items() if v == post_cfg.get("view", "luma")), next(iter(VIEWS)))
+    pre_cfg = pipe.cfg["pre_enhance"]
+    default_contrast_value = float(pre_cfg.get("clahe_clip", 1.5)) if pre_cfg.get("clahe", True) else 0.0
+    default_contrast = min(CONTRAST, key=lambda k: abs(CONTRAST[k] - default_contrast_value))
 
     def paired_rgb(path, which):
         e = by_thermal.get(str(path))
@@ -200,25 +215,26 @@ def build(pipes, default_colorizer="thermovision"):
             label = f"real RGB with synthetic {label}"
         return (read_rgb(p) if p.exists() else None), label
 
-    def settings_of(colorizer, sr, conf, tiles, hotspot, palette):
+    def settings_of(colorizer, sr, conf, tiles, hotspot, palette, view, contrast):
         return dict(colorizer=COLORIZERS.get(colorizer, default_colorizer), sr=SR_MODELS.get(sr, "bicubic"),
                     conf=float(conf), tiles=TILES.get(tiles, 0), hotspot_percent=float(hotspot),
-                    black_hot=palette == PALETTES[1])
+                    black_hot=palette == PALETTES[1], view=VIEWS.get(view, "luma"),
+                    contrast=CONTRAST.get(contrast, default_contrast_value))
 
     def run_one(path, s):
         try:
             return pipes.run(path, s["colorizer"], s["sr"], s["conf"], s["tiles"], s["hotspot_percent"],
-                             s["black_hot"])
+                             s["black_hot"], s["view"], s["contrast"])
         except ThermalImageError as e:
             raise gr.Error(str(e))
         except Exception as e:   # e.g. a checkpoint that does not load
             raise gr.Error(f"{type(e).__name__}: {e}")
 
-    def process(upload, pick, which, colorizer, sr, conf, tiles, hotspot, palette):
+    def process(upload, pick, which, colorizer, sr, conf, tiles, hotspot, palette, view, contrast):
         path = upload or (choices.get(pick) if pick else None)
         if not path:
             raise gr.Error("Upload a thermal image or pick one from the list.")
-        s = settings_of(colorizer, sr, conf, tiles, hotspot, palette)
+        s = settings_of(colorizer, sr, conf, tiles, hotspot, palette, view, contrast)
         p, r = run_one(path, s)
         rep = report(path, p, r, s)
         out = Path(tempfile.mkdtemp(prefix="infravision_"))
@@ -228,7 +244,8 @@ def build(pipes, default_colorizer="thermovision"):
         bundle = out / f"{stem}_infravision.zip"
         with zipfile.ZipFile(bundle, "w") as z:
             for name, img in [("1_thermal", r["thermal"]), ("2_super_resolved", r["sr"]),
-                              ("3_colorized", r["colorized"]), ("4_overlay", r["fused"])]:
+                              ("3_colour_view", r["colour_view"]), ("3b_colorizer_raw", r["colorized"]),
+                              ("4_overlay", r["fused"])]:
                 f = out / f"{stem}_{name}.png"
                 save_rgb(f, np.repeat(img[..., None], 3, axis=2) if img.ndim == 2 else img)
                 z.write(f, f.name)
@@ -239,14 +256,14 @@ def build(pipes, default_colorizer="thermovision"):
             [f"Input {d['input_size'][0]}x{d['input_size'][1]} → output {d['output_size'][0]}x{d['output_size'][1]}",
              ""] + [f"- {q}" for q in quality_lines(p)] + [f"- Detector: {p.detector.name}"]
             + (["", "**Notes:**"] + [f"- {n}" for n in r["notes"]] if r["notes"] else []))
-        return (r["thermal"], r["sr"], r["colorized"], r["fused"], badge(d["count"]), latency_table(r["timings"]),
+        return (r["thermal"], r["sr"], r["colour_view"], r["fused"], badge(d["count"]), latency_table(r["timings"]),
                 info_md, [str(png), str(bundle)],
                 gr.update(value=rgb, label=rgb_label or "real RGB (only for synthetic samples)"))
 
-    def process_batch(files, colorizer, sr, conf, tiles, hotspot, palette, progress=gr.Progress()):
+    def process_batch(files, colorizer, sr, conf, tiles, hotspot, palette, view, contrast, progress=gr.Progress()):
         if not files:
             raise gr.Error("Add one or more thermal images.")
-        s = settings_of(colorizer, sr, conf, tiles, hotspot, palette)
+        s = settings_of(colorizer, sr, conf, tiles, hotspot, palette, view, contrast)
         out = Path(tempfile.mkdtemp(prefix="infravision_batch_"))
         rows, gallery, reports = [], [], []
         for f in progress.tqdm(files, desc="frames"):
@@ -291,6 +308,9 @@ def build(pipes, default_colorizer="thermovision"):
                 hotspot = gr.Slider(0, 100, value=round(100 * float(post_cfg.get("hotspot_alpha", 0.35))), step=5,
                                     label="Thermal hotspot blend (%)")
                 palette = gr.Radio(PALETTES, value=PALETTES[0], label="Input palette (black-hot gets flipped)")
+                view = gr.Radio(list(VIEWS), value=default_view, label="Colour view (stage 3)")
+                contrast = gr.Radio(list(CONTRAST), value=default_contrast,
+                                    label="Contrast boost after super-resolution (CLAHE)")
             with gr.Column(scale=3):
                 with gr.Tab("Single image"):
                     with gr.Row():
@@ -306,7 +326,7 @@ def build(pipes, default_colorizer="thermovision"):
                         s1 = gr.Image(label="1. Raw thermal", interactive=False)
                         s2 = gr.Image(label="2. Super-resolved thermal", interactive=False)
                     with gr.Row():
-                        s3 = gr.Image(label="3. AI colorized", interactive=False)
+                        s3 = gr.Image(label="3. Colour view", interactive=False)
                         s4 = gr.Image(label="4. Tactical overlay (people + hotspots)", interactive=False)
                     with gr.Row():
                         with gr.Column(scale=1):
@@ -325,8 +345,9 @@ def build(pipes, default_colorizer="thermovision"):
                     batch_files = gr.File(label="Downloads: summary CSV · all overlays + reports (zip)",
                                           file_count="multiple")
         gr.Markdown("Colours are estimated by a model trained on LLVIP street scenes; they are not temperatures. "
-                    "Hotspots mark the warmest pixels of each frame (not only people).")
-        controls = [colorizer, sr, conf, tiles, hotspot, palette]
+                    "'AI colour on thermal detail' keeps the brightness of the thermal frame and takes only the "
+                    "tint from the colorizer. Hotspots mark the warmest pixels of each frame (not only people).")
+        controls = [colorizer, sr, conf, tiles, hotspot, palette, view, contrast]
         run_btn.click(process, [upload, pick, which] + controls,
                       [s1, s2, s3, s4, count, latency, quality, files, p_rgb])
         batch_btn.click(process_batch, [batch_in] + controls, [batch_gal, batch_sum, batch_files])

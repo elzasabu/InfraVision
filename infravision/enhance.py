@@ -331,8 +331,8 @@ class Enhancer:
         from .colorpost import postprocess
 
         learned = self.colorizer.adapter is not None or self.colorizer.model is not None
-        out = postprocess(rgb, sr_heat, learned=learned, **self.post_cfg)
+        out, view = postprocess(rgb, sr_heat, learned=learned, luma=sr, return_view=True, **self.post_cfg)
         t["color_post"] = time.perf_counter() - t0
         if timings is not None:
             timings.update(t)
-        return dict(pre_enhanced=pre, sr=sr, colorized=rgb, enhanced_rgb=out)
+        return dict(pre_enhanced=pre, sr=sr, colorized=rgb, colour_view=view, enhanced_rgb=out)

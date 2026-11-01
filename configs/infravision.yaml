@@ -25,7 +25,7 @@ pre_enhance:
   denoise_strength: 5   # nlmeans only: cv2.fastNlMeansDenoising h; 0 disables
   clahe: true
   clahe_stage: post     # post = after SR (does not feed amplified noise to SR) | pre = old order
-  clahe_clip: 1.5       # contrast limit; higher = stronger local contrast
+  clahe_clip: 1.0       # contrast limit; higher = stronger local contrast, but people stand out less from foliage
   clahe_tiles: 8        # grid size (tiles per side)
 
 # Branch A step 2: super-resolution (EDSR on a bicubic-upscaled frame).
@@ -63,6 +63,11 @@ colorizer:
 # Branch A step 4: after the colorizer (RUN_ORDER 3). Fixes washed-out colour and keeps people visible.
 color_post:
   enabled: true
+  # What the colour stage shows. luma = brightness/detail from the thermal frame, colour from the
+  # colorizer (the LLVIP colorizer alone is too dark: night photos) | palette = thermal false colour
+  # (palette_colormap) | ai = the colorizer output itself (chroma boost + L CLAHE, the old view)
+  view: luma
+  palette_colormap: inferno
   chroma: 1.8               # LAB a/b multiplier (1 = off); skipped for the fallback false-colour map
   l_clahe_clip: 1.5         # CLAHE on LAB lightness (0 = off)
   hotspot_alpha: 0.35       # magma overlay on the hottest pixels (0 = off, 1 = pure false colour)

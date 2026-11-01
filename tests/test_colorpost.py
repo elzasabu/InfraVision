@@ -2,7 +2,7 @@
 import cv2
 import numpy as np
 
-from infravision.colorpost import chroma_boost, hotspot_blend, postprocess
+from infravision.colorpost import chroma_boost, colour_view, hotspot_blend, luma_transfer, postprocess
 
 
 def saturation(rgb):
@@ -39,4 +39,24 @@ def test_postprocess_switches():
     rgb, thermal = muted_image(), np.zeros((64, 64), np.uint8)
     assert np.array_equal(postprocess(rgb, thermal, enabled=False), rgb)
     assert np.array_equal(postprocess(rgb, thermal, learned=False, hotspot_alpha=0), rgb)   # fallback map kept
-    assert saturation(postprocess(rgb, thermal, learned=True, hotspot_alpha=0)) > saturation(rgb)
+    assert saturation(postprocess(rgb, thermal, learned=True, hotspot_alpha=0, view="ai")) > saturation(rgb)
+
+
+def test_luma_view_keeps_thermal_detail_and_ai_colour():
+    dark = np.full((32, 32, 3), (20, 30, 15), np.uint8)       # "night photo" colorizer output
+    gray = np.full((64, 64), 100, np.uint8)
+    gray[20:30, 20:30] = 240                                   # warm person
+    out = luma_transfer(dark, gray, 1.8)
+    assert out.shape == (64, 64, 3)
+    L = cv2.cvtColor(out, cv2.COLOR_RGB2LAB)[..., 0].astype(int)
+    assert abs(L[0, 0] - 100) <= 3 and L[25, 25] > 220         # brightness follows the thermal frame
+    assert out[0, 0, 1] > out[0, 0, 0] and out[0, 0, 1] > out[0, 0, 2]   # keeps the green tint
+
+
+def test_colour_views():
+    rgb, gray = muted_image(), np.tile(np.arange(64, dtype=np.uint8) * 4, (64, 1))
+    assert colour_view(rgb, gray, "palette").shape == (64, 64, 3)
+    assert not np.array_equal(colour_view(rgb, gray, "palette"), colour_view(rgb, gray, "luma"))
+    assert np.array_equal(colour_view(rgb, gray, "luma", learned=False), rgb)   # fallback map untouched
+    out, view = postprocess(rgb, gray, view="palette", return_view=True)
+    assert np.array_equal(out, view)                           # no hotspot LUT on top of a palette

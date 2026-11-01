@@ -85,6 +85,7 @@ class Pipeline:
             pre_enhanced=a["pre_enhanced"],
             sr=a["sr"],
             colorized=a["colorized"],   # colorizer output before colour boost / hotspots
+            colour_view=a["colour_view"],   # what stage 3 shows (color_post.view), before hotspots
             enhanced_rgb=rgb,
             fused=fused,
             detections=dict(boxes=boxes, scores=det["scores"], count=int(len(det["scores"])),
