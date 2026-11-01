@@ -12,8 +12,9 @@ Fine-tunes detector **v2** (the result of `train_sar_yolo_kaggle.ipynb`) on a la
 * **AIResQ** thermal drone flights (tiny people, 7x9 px): full frames + 2x2 tiles
 * **WiSARD** wilderness SAR thermal: 31 labelled sequences, FLIR + DJI cameras, top-down and oblique
 * **RGBTDronePerson** (tiny people, median 13 px) and **HIT-UAV** (60–130 m altitude), thermal only
+* **LLVIP** persons: large, close, oblique people (the v2 model missed them)
 
-Test sets are separate flights / splits, never seen in training: `test_pop`, `test_flood`, `test_airesq`, `test_wisard`, `test_rgbt`, `test_hituav`.
+Test sets are separate flights / splits, never seen in training: `test_pop`, `test_flood`, `test_airesq`, `test_wisard`, `test_rgbt`, `test_hituav`, `test_llvip`.
 
 **Run**
 1. **Datasets → New Dataset** → upload `sar_v3_yolo.zip` (private). Kaggle unzips it.
@@ -64,7 +65,7 @@ def data_yaml(test_split, train="train.txt"):
     y.write_text(f"path: {SAR}\\ntrain: {SAR / train}\\nval: images/val\\ntest: images/{test_split}\\n\\nnames:\\n  0: person\\n")
     return y
 
-TESTS = [s for s in ("test_pop", "test_flood", "test_airesq", "test_wisard", "test_rgbt", "test_hituav")
+TESTS = [s for s in ("test_pop", "test_flood", "test_airesq", "test_wisard", "test_rgbt", "test_hituav", "test_llvip")
          if (SAR / "images" / s).is_dir()]
 DATA_YAML = data_yaml("test_pop")
 RUNS_DIR, RUN_NAME = WORK / "runs", "sar_v3"
@@ -116,7 +117,7 @@ def decoy_rate(weights, conf=0.25):
 def evaluate_all(weights, tag):
     out = {}
     for s in TESTS:
-        for sz in ([640, IMGSZ] if s in ("test_airesq", "test_wisard", "test_rgbt", "test_hituav") else [IMGSZ]):
+        for sz in ([640, IMGSZ] if s in ("test_airesq", "test_wisard", "test_rgbt", "test_hituav", "test_llvip") else [IMGSZ]):
             m = YOLO(str(weights)).val(data=str(data_yaml(s)), split="test", imgsz=sz, batch=BATCH, device=0,
                                        plots=False, project=str(WORK / "val"), name=f"{tag}_{s}_{sz}", exist_ok=True)
             out[f"{s}@{sz}"] = {"P": round(m.box.mp, 4), "R": round(m.box.mr, 4),
@@ -139,7 +140,7 @@ show(before)
 md("""
 ## 6. Train
 
-10.7k training images. The health check prints the measured time per epoch and an ETA after every epoch.
+12.2k training images. The health check prints the measured time per epoch and an ETA after every epoch.
 Stops early when val mAP stops improving for 6 epochs.
 Health check after every epoch: stops if the loss turns NaN, or val mAP50 is under 0.3 at epoch 3
 (the starting model is already well above that).

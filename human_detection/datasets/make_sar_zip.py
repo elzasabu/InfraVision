@@ -162,6 +162,8 @@ def main():
     ap.add_argument("--rgbt", default="", help="RGBTDronePerson in YOLO form (convert_rgbtdroneperson.py): "
                                                "train -> train, val -> test_rgbt")
     ap.add_argument("--hituav", default="", help="HIT-UAV in YOLO form (convert_hituav.py): train / val / test_hituav")
+    ap.add_argument("--llvip", default="", help="LLVIP persons in YOLO form (convert_llvip_persons.py): "
+                                                "train -> train, test -> test_llvip (large, near, oblique people)")
     ap.add_argument("--steps", default="", help="train.txt: keep every n-th frame per source, e.g. "
                                                 "pop=3,pop_flood=3,airesq_tile=2,wisard=2,rgbt=2 (default pop/pop_flood = --pop_step)")
     args = ap.parse_args()
@@ -232,7 +234,8 @@ def main():
 
         # Extra thermal person sets (already YOLO, person only; see their converters).
         for root, kind, plan in ((args.rgbt, "rgbt", (("train", "train"), ("val", "test_rgbt"))),
-                                 (args.hituav, "hituav", (("train", "train"), ("val", "val"), ("test", "test_hituav")))):
+                                 (args.hituav, "hituav", (("train", "train"), ("val", "val"), ("test", "test_hituav"))),
+                                 (args.llvip, "llvip", (("train", "train"), ("test", "test_llvip")))):
             if not root:
                 continue
             for src, dst in plan:

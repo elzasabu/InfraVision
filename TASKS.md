@@ -49,6 +49,9 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
 - **GUI** (`app.py`): bicubic default, new black-hot/white-hot palette switch. Weights zip for other machines: `/run/media/advaithmanoj/SharedData/Projects/Infravision/Data/infravision_weights.zip` (unzip inside the cloned `InfraVision/`). Holds YOLO, colorizer and EDSR v3.
 - **Downloads:** slow servers (Zenodo ~0.36 MB/s per connection) → `scripts/pdl.sh URL OUT 16` (parallel ranges, chunk-verified, resumable). Google Drive: popular files hit "Quota exceeded" for anonymous/scripted downloads; download in the signed-in browser instead.
 
+- **Large close people (found 2026-11-01):** a low oblique frame with 4 clear people → the POP model found 0 at any imgsz; stock COCO yolo11s found 4/4 (0.87–0.91). The fine-tune forgot large people. Fix now: `detection.near_weights` (COCO model, boxes ≥ 8% of frame height only; no change on POP / HIT-UAV / RGBT in an A/B on 100–150 frames each). Fix in training: LLVIP persons in v3. `checkpoints/yolo/coco_yolo11s.pt` must be copied to other machines (not yet in the external-drive zip: drive was unmounted).
+- **Colorizer (2026-11-01):** retraining on LLVIP won't help (night street scenes). RGBTDronePerson colour/thermal pairs are **not aligned** (different fields of view; checked with edge overlays), so they can't train it either. Use the `palette` / `luma` views; a better colorizer needs registered daytime aerial pairs.
+
 ## User tasks
 
 **Every training run now stops itself early if it is broken** (NaN loss, EDSR more than 3 dB below bicubic, colorizer output flat, YOLO mAP50 < 0.05 at epoch 5). A run that fails in the first minutes with `HEALTH CHECK FAILED` means: send Claude the log.
@@ -95,10 +98,10 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   - The notebook prints before/after mAP50 on test_pop, test_flood, test_airesq, test_wisard and the empty-blob rate (gate < 2%).
 - [ ] **U10: train detector v3 on Kaggle** (after U9 finishes)
   1. Put U9's `sar_1024.zip` in `datasets/outputs/`. Claude runs `scripts/install_detector.py ../datasets/outputs/sar_1024.zip --name sar_v2 --sweep` → installs `checkpoints/yolo/sar_v2.pt` (old `best.pt` kept), prints before/after, writes `human_detection/sar_v2_start/start.pt`.
-  2. Kaggle → two private datasets: `human_detection/sar_v3_yolo.zip` (1.86 GB) and the folder with `start.pt` (19 MB).
+  2. Kaggle → two private datasets: `human_detection/sar_v3_yolo.zip` (2.0 GB) and the folder with `start.pt` (19 MB).
   3. Import `colab_training/train_sar_v3_yolo_kaggle.ipynb`, Add Input → both, GPU T4 x2, Internet On, Save & Run All.
   4. The log prints min/epoch and an ETA after every epoch. Output `sar_v3.zip` → `datasets/outputs/`.
-  - Data: POP (every 3rd) + flood v2, AIResQ, WiSARD, **RGBTDronePerson** (every 3rd) and **HIT-UAV**: 10.7k train frames; 6 test sets. 4 data workers, batch 16, 20 epochs, patience 6. Dry-run tested on CPU.
+  - Data: POP (every 3rd) + flood v2, AIResQ, WiSARD, **RGBTDronePerson** (every 3rd), **HIT-UAV** and **LLVIP persons** (every 8th; large close oblique people): 12.2k train frames; 7 test sets incl. `test_llvip`. 4 data workers, batch 16, 20 epochs, patience 6. Dry-run tested on CPU (before LLVIP was added; same code path).
   - Baselines of the current model: HIT-UAV test mAP50 0.262, RGBTDronePerson val 0.055 @640 / 0.076 @1024.
 - [x] **U7: disaster datasets** (replaces U3)
   - Done 2026-11-01: WiSARD full (browser download, zip integrity-tested) + AIResQ benchmark; both in `sar_yolo.zip`. Also **HIT-UAV** (Zenodo, md5 ok) and **RGBTDronePerson** (Google Drive, CC BY 4.0, thermal tiny people) → converters in `human_detection/datasets/convert_*.py`, used in U10. Checked and rejected: SeaDronesSee (RGB/NIR, not thermal), Figshare SAR_Drone (260 whole-image labels, simulated), VisDrone/HERIDAL/C2A (RGB). Still missing: real aerial thermal people *in* water (WiSARD/AIResQ have people at lakeshores and rivers, not swimming).

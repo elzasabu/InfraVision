@@ -82,6 +82,15 @@ detection:
   iou: 0.5
   tile: 0               # 0 = whole frame; N = N x N overlapping tiles (small people)
   tile_overlap: 0.2
+  # Near-person model: stock COCO YOLO11s, kept only for big boxes (>= near_min_height of the frame
+  # height). The SAR model learned small, far, top-down people and misses large close ones
+  # (0/4 on a low oblique frame where COCO finds 4/4); on POP / HIT-UAV it changes nothing.
+  # Empty list = off. The file is copied to checkpoints/yolo/coco_yolo11s.pt (Ultralytics yolo11s.pt).
+  near_weights:
+    - checkpoints/yolo/coco_yolo11s.pt
+  near_conf: 0.4
+  near_imgsz: 640
+  near_min_height: 0.08
   weights:
     - checkpoints/yolo/best.pt
     - human_detection/runs/pop/pop_1024/weights/best.pt

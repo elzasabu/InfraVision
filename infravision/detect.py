@@ -21,7 +21,8 @@ class Detector:
     """Ultralytics YOLO, single class person. Returns boxes in input-frame pixels."""
 
     def __init__(self, weights=(), imgsz=1024, conf=0.25, iou=0.5, tile=0, tile_overlap=0.2,
-                 device="auto", run_on="original", **_):
+                 device="auto", run_on="original", near_weights=(), near_conf=0.4, near_imgsz=640,
+                 near_min_height=0.08, **_):
         from ultralytics import YOLO
 
         self.path = find_weights(weights)
@@ -37,11 +38,22 @@ class Detector:
         self.tile, self.overlap = int(tile), float(tile_overlap)
         self.run_on = run_on
         self.device = pick_device(device)
+        # Optional "near person" model (stock COCO YOLO): the SAR model only learned small, far,
+        # top-down people and misses large close ones. Only its boxes at least near_min_height of
+        # the frame height are kept, so it cannot add noise among the small people.
+        self.near_path = find_weights(near_weights) if near_weights else None
+        self.near = YOLO(str(self.near_path)) if self.near_path else None
+        self.near_conf, self.near_imgsz = float(near_conf), int(near_imgsz)
+        self.near_min_height = float(near_min_height)
+        if near_weights and self.near is None and self.note is None:
+            self.note = ("near-person model not found (large close people may be missed): copy Ultralytics "
+                         "yolo11s.pt to checkpoints/yolo/coco_yolo11s.pt")
 
     @property
     def name(self):
         return f"YOLO ({short(self.path)}) imgsz={self.imgsz} conf={self.conf} iou={self.iou}" + (
-            f" tiles={self.tile}x{self.tile}" if self.tile > 1 else "")
+            f" tiles={self.tile}x{self.tile}" if self.tile > 1 else "") + (
+            f" + near-person model ({short(self.near_path)}, conf {self.near_conf})" if self.near else "")
 
     def _predict(self, bgr, imgsz):
         r = self.model.predict(bgr, imgsz=imgsz, conf=self.conf, iou=self.iou, classes=[0],
@@ -65,6 +77,17 @@ class Detector:
                 all_s.append(s)
             boxes, scores = np.concatenate(all_b), np.concatenate(all_s)
             if len(boxes):
+                keep = nms(torch.from_numpy(boxes), torch.from_numpy(scores), self.iou).numpy()
+                boxes, scores = boxes[keep], scores[keep]
+        if self.near is not None:
+            r = self.near.predict(bgr, imgsz=self.near_imgsz, conf=self.near_conf, iou=self.iou, classes=[0],
+                                  device=str(self.device), verbose=False)[0]
+            nb = r.boxes.xyxy.cpu().numpy().astype(np.float32).reshape(-1, 4)
+            ns = r.boxes.conf.cpu().numpy().astype(np.float32)
+            big = (nb[:, 3] - nb[:, 1]) >= self.near_min_height * h
+            if big.any():
+                boxes = np.concatenate([boxes.reshape(-1, 4), nb[big]])
+                scores = np.concatenate([scores, ns[big]])
                 keep = nms(torch.from_numpy(boxes), torch.from_numpy(scores), self.iou).numpy()
                 boxes, scores = boxes[keep], scores[keep]
         order = np.argsort(-scores)
