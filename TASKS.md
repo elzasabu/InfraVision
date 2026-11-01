@@ -93,8 +93,15 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   3. Save Version → Save & Run All (Commit). ~3–4 h (30 epochs max, early stop).
   4. Output tab → `sar_1024.zip` → put it in `datasets/outputs/`. Claude installs it as `checkpoints/yolo/sar_v2.pt` (the old `best.pt` stays) and compares.
   - The notebook prints before/after mAP50 on test_pop, test_flood, test_airesq, test_wisard and the empty-blob rate (gate < 2%).
+- [ ] **U10: train detector v3 on Kaggle** (after U9 finishes)
+  1. Put U9's `sar_1024.zip` in `datasets/outputs/`. Claude runs `scripts/install_detector.py ../datasets/outputs/sar_1024.zip --name sar_v2 --sweep` → installs `checkpoints/yolo/sar_v2.pt` (old `best.pt` kept), prints before/after, writes `human_detection/sar_v2_start/start.pt`.
+  2. Kaggle → two private datasets: `human_detection/sar_v3_yolo.zip` (1.86 GB) and the folder with `start.pt` (19 MB).
+  3. Import `colab_training/train_sar_v3_yolo_kaggle.ipynb`, Add Input → both, GPU T4 x2, Internet On, Save & Run All.
+  4. The log prints min/epoch and an ETA after every epoch. Output `sar_v3.zip` → `datasets/outputs/`.
+  - Data: POP (every 3rd) + flood v2, AIResQ, WiSARD, **RGBTDronePerson** (every 3rd) and **HIT-UAV**: 10.7k train frames; 6 test sets. 4 data workers, batch 16, 20 epochs, patience 6. Dry-run tested on CPU.
+  - Baselines of the current model: HIT-UAV test mAP50 0.262, RGBTDronePerson val 0.055 @640 / 0.076 @1024.
 - [x] **U7: disaster datasets** (replaces U3)
-  - Done 2026-11-01: WiSARD full (browser download) + AIResQ benchmark; both in `sar_yolo.zip`. HIT-UAV not needed for now.
+  - Done 2026-11-01: WiSARD full (browser download, zip integrity-tested) + AIResQ benchmark; both in `sar_yolo.zip`. Also **HIT-UAV** (Zenodo, md5 ok) and **RGBTDronePerson** (Google Drive, CC BY 4.0, thermal tiny people) → converters in `human_detection/datasets/convert_*.py`, used in U10. Checked and rejected: SeaDronesSee (RGB/NIR, not thermal), Figshare SAR_Drone (260 whole-image labels, simulated), VisDrone/HERIDAL/C2A (RGB). Still missing: real aerial thermal people *in* water (WiSARD/AIResQ have people at lakeshores and rivers, not swimming).
   - HIT-UAV (thermal drone, person boxes, CC BY 4.0): `git clone https://github.com/suojiashun/HIT-UAV-Infrared-Thermal-Dataset` into `datasets/HIT-UAV/`.
   - WiSARD (wilderness SAR, thermal + RGB, MIT-style licence), from sites.google.com/uw.edu/wisard: first the **971.6 MB Multi Modal Sample** into `datasets/WiSARD/`. Only get the 40.5 GB full set if the sample shows a clear gain.
   - Then hand C8 to Claude.
@@ -134,6 +141,7 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   - Data done 2026-11-01: `prepare_flood_aug.py` adds one empty decoy blob per flooded person (7343 decoys), saved in `flood_decoys.json`; `scripts/eval_flood_decoys.py` measures the rate (current model 26.8%, gate < 2%). Retrain = U9.
   - Add the same number of empty water blobs (no person) to every flooded copy, train and test, so a blob no longer means "person". Rebuild the zip; then one more YOLO run on Kaggle. Gate: empty blobs detected < 2%, and the flood test score drops to a believable value.
 - [ ] **C6: detection evaluation** (needs U1)
+  - 2026-11-01: `scripts/install_detector.py --sweep` runs the pipeline Detector (tiling included) old vs new weights at imgsz x tiles on POP test, POP flood, HIT-UAV test, RGBTDronePerson val (100 frames each, ~1 h CPU) → `results/detection_<name>_sweep.json`. Run it when U9 lands.
   - Sweep imgsz, tiling (`detection.tile`) and TTA on POP val, then pick the best.
   - Report test-set P / R / mAP@0.5 to `results/detection_upgrade.json` and update `docs/RESULTS.md`.
 - [ ] **C8: disaster datasets → YOLO + eval** (needs U7)

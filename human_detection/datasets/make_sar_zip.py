@@ -16,11 +16,12 @@ Splits are by flight / sequence, never by frame, so no near-duplicate frame is i
             Sequences without labels or with zero boxes (unannotated) are skipped.
 
 Zip layout (Kaggle unzips it):
-  sar/train.txt                 balanced training list (~7.5k), sar/train_all.txt = every train image
+  sar/train.txt                 balanced training list (only these train images are packed)
   sar/images/{train,val,test_pop,test_flood,test_airesq,test_wisard}/  sar/labels/...
   sar/flood_decoys.json         empty-blob boxes for scripts/eval_flood_decoys.py
   sar/splits.json               which flights / sequences went where
-  weights/start.pt              starting model (checkpoints/yolo/best.pt, POP fine-tune)
+  weights/start.pt              starting model (--weights; `none` = leave it out and upload start.pt separately)
+  RGBTDronePerson / HIT-UAV     --rgbt / --hituav (thermal tiny-person sets): test_rgbt, test_hituav
 """
 import argparse
 import json
@@ -97,10 +98,17 @@ def tiles(img, rows, n=2, overlap=0.2, keep=0.5):
 
 
 class Packer:
-    def __init__(self, z):
+    """Writes images + labels; train frames are thinned per source (keep every steps[kind]-th)."""
+
+    def __init__(self, z, steps=None):
         self.z, self.count, self.boxes, self.train = z, {}, {}, []
+        self.steps, self.seen = steps or {}, {}
 
     def add(self, split, name, rows, src=None, data=None, kind="other"):
+        if split == "train":
+            self.seen[kind] = self.seen.get(kind, 0) + 1
+            if self.seen[kind] % self.steps.get(kind, 1):
+                return
         stem = Path(name).stem
         if src is not None:
             self.z.write(src, f"sar/images/{split}/{name}")
@@ -151,7 +159,14 @@ def main():
     ap.add_argument("--wisard_step", type=int, default=4, help="train/val: keep every n-th WiSARD frame with people")
     ap.add_argument("--wisard_empty_step", type=int, default=12, help="train/val: keep every n-th empty WiSARD frame")
     ap.add_argument("--pop_step", type=int, default=2, help="keep every n-th POP train frame in train.txt")
+    ap.add_argument("--rgbt", default="", help="RGBTDronePerson in YOLO form (convert_rgbtdroneperson.py): "
+                                               "train -> train, val -> test_rgbt")
+    ap.add_argument("--hituav", default="", help="HIT-UAV in YOLO form (convert_hituav.py): train / val / test_hituav")
+    ap.add_argument("--steps", default="", help="train.txt: keep every n-th frame per source, e.g. "
+                                                "pop=3,pop_flood=3,airesq_tile=2,wisard=2,rgbt=2 (default pop/pop_flood = --pop_step)")
     args = ap.parse_args()
+    steps = {"pop": args.pop_step, "pop_flood": args.pop_step}
+    steps.update({k: int(v) for k, v in (kv.split("=") for kv in args.steps.split(",") if kv)})
     for d in (POP / "images" / "train", AIRESQ / "images", WISARD_SAMPLE):
         if not d.is_dir():
             sys.exit(f"missing {d}")
@@ -160,7 +175,7 @@ def main():
     splits = {"airesq": {}, "wisard": {}}
     out = Path(args.out)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as z:
-        pk = Packer(z)
+        pk = Packer(z, steps)
         # POP
         for src, dst in (("train", "train"), ("val", "val"), ("test", "test_pop"), ("test_flood", "test_flood")):
             for f in images_in(POP / "images" / src):
@@ -215,32 +230,33 @@ def main():
             if missing:
                 sys.exit(f"WiSARD test/val sequences not found: {missing}")
 
-        # Balanced list (keeps an epoch near the last run's length; consecutive POP frames are
-        # near-duplicates): every 2nd POP frame and flood copy, all AIResQ frames and tiles
-        # (tiles: all with people + every 4th empty one), all WiSARD picks. train_all.txt = everything.
-        n_pop = n_fl = 0
+        # Extra thermal person sets (already YOLO, person only; see their converters).
+        for root, kind, plan in ((args.rgbt, "rgbt", (("train", "train"), ("val", "test_rgbt"))),
+                                 (args.hituav, "hituav", (("train", "train"), ("val", "val"), ("test", "test_hituav")))):
+            if not root:
+                continue
+            for src, dst in plan:
+                files = images_in(Path(root) / "images" / src)
+                if not files:
+                    sys.exit(f"no images in {Path(root) / 'images' / src}")
+                for f in files:
+                    pk.add(dst, f.name, read_yolo(Path(root) / "labels" / src / (f.stem + ".txt")), src=f, kind=kind)
+                splits.setdefault(kind, {})[src] = f"{dst} ({len(files)})"
+
+        # Balanced list (consecutive video frames are near-duplicates): Packer kept every
+        # steps[kind]-th train frame of each source (default: every 2nd POP frame and flood copy).
         train, mix = [], {}
         for path, kind, people in pk.train:
-            if kind == "pop":
-                n_pop += 1
-                take = n_pop % args.pop_step == 0
-            elif kind == "pop_flood":
-                n_fl += 1
-                take = n_fl % args.pop_step == 0
-            else:
-                take = True
-            if take:
-                train.append(path)
-                mix[kind] = mix.get(kind, 0) + 1
+            train.append(path)
+            mix[kind] = mix.get(kind, 0) + 1
         z.writestr("sar/train.txt", "\n".join(train) + "\n")
-        z.writestr("sar/train_all.txt", "\n".join(p for p, _, _ in pk.train) + "\n")
         z.writestr("sar/splits.json", json.dumps({**splits, "counts": pk.count, "boxes": pk.boxes,
                                                    "train_list": len(train), "train_mix": mix}, indent=1))
-        if Path(args.weights).is_file():
+        if args.weights != "none" and Path(args.weights).is_file():
             z.write(args.weights, "weights/start.pt")
     for s in sorted(pk.count):
         print(f"{s:12s} {pk.count[s]:6d} images {pk.boxes[s]:7d} boxes")
-    print(f"train.txt {len(train)} entries {mix}; train_all.txt {len(pk.train)}; start weights: {args.weights}")
+    print(f"train.txt {len(train)} entries {mix}; source frames seen {pk.seen}; start weights: {args.weights}")
     print(f"Wrote {out} ({out.stat().st_size / 1e9:.2f} GB)")
 
 
