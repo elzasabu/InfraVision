@@ -100,8 +100,9 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
 - [ ] **U10: train detector v3 on Kaggle** (after U9 finishes)
   0. Ready 2026-11-01: `start.pt` = v2 at `human_detection/sar_v2_start/start.pt`; zip rebuilt with balanced val (every 4th POP val frame: 1372 val) and the notebook fine-tunes with SGD lr 0.002 cosine, patience 8.
   1. (done) Put U9's `sar_1024.zip` in `datasets/outputs/`. Claude runs `scripts/install_detector.py ../datasets/outputs/sar_1024.zip --name sar_v2 --sweep` → installs `checkpoints/yolo/sar_v2.pt` (old `best.pt` kept), prints before/after, writes `human_detection/sar_v2_start/start.pt`.
-  2. Kaggle → two private datasets: `human_detection/sar_v3_yolo.zip` (1.86 GB) and `human_detection/sar_v2_start/start.pt` (19 MB).
-  3. Import `colab_training/train_sar_v3_yolo_kaggle.ipynb`, Add Input → both, GPU T4 x2, Internet On, Save & Run All.
+  2. **Faster upload (use this):** Kaggle → two private datasets: `human_detection/sar_v3_addon.zip` (0.69 GB: only the data the v2 upload lacks) and `human_detection/sar_v2_start/start.pt` (19 MB).
+  3. Import `colab_training/train_sar_v3_addon_kaggle.ipynb`, Add Input → **three**: the v2 `sar_yolo` dataset (already on Kaggle), the add-on, `start.pt`. GPU T4 x2, Internet On, Save & Run All. Same training data as the full zip (dry-run tested with 3 inputs).
+     (Full alternative: `sar_v3_yolo.zip` (1.86 GB) + `train_sar_v3_yolo_kaggle.ipynb` with 2 inputs.)
   4. The log prints min/epoch and an ETA after every epoch. Output `sar_v3.zip` → `datasets/outputs/`.
   - Data: POP (every 3rd) + flood v2, AIResQ, WiSARD, **RGBTDronePerson** (every 3rd), **HIT-UAV** and **LLVIP persons** (every 8th; large close oblique people): 12.2k train frames; 7 test sets incl. `test_llvip`. 4 data workers, batch 16, 20 epochs, patience 6. Dry-run tested on CPU (before LLVIP was added; same code path).
   - Baselines of the current model: HIT-UAV test mAP50 0.262, RGBTDronePerson val 0.055 @640 / 0.076 @1024.
