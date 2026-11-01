@@ -57,6 +57,25 @@ flights / sequences never used for training. mAP@0.5 from the notebook (`results
   100-150 frames each). v3 adds LLVIP persons to train it in.
 - New thermal sets, current (POP) model: HIT-UAV test 0.262, RGBTDronePerson val 0.055 @640 / 0.076 @1024.
 
+## Detection v3: + RGBTDronePerson, HIT-UAV, LLVIP persons (Kaggle U10, 2026-11-01)
+
+`checkpoints/yolo/sar_v3.pt`, fine-tuned from v2 (balanced val, SGD lr 0.002 cosine, 20 epochs, best epoch 18:
+still improving). mAP@0.5 from the notebook (`results/detection_sar_v3_eval.json`), v2 -> v3:
+
+| test set | @640 | @1024 |
+|---|---|---|
+| POP test | | 0.614 -> **0.525** (regression) |
+| POP flood | | 0.955 -> 0.973 |
+| AIResQ | 0.325 -> 0.297 | 0.396 -> **0.457** |
+| WiSARD | 0.469 -> **0.570** | 0.630 -> 0.637 |
+| RGBTDronePerson val | 0.084 -> **0.272** | 0.102 -> **0.327** |
+| HIT-UAV test | 0.349 -> **0.784** | 0.344 -> **0.851** |
+| LLVIP test (large close people) | 0.144 -> **0.650** | 0.044 -> **0.705** |
+| empty flood blobs detected | 2.7% -> 2.5% | |
+
+v3 generalises far better (new terrain, altitudes, close oblique people) but POP drops 0.09: POP was
+every 3rd frame and ~16% of training. Dashboard default = v3 (v2 next in `detection.weights`).
+
 ## Super-resolution: EDSR x2 on POP (primary dataset)
 
 100 fixed 192x192 crops from POP val (F13-F16), degraded with the training

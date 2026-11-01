@@ -104,11 +104,11 @@ for k, v in sets.items():
 md("""
 ## 3. Train
 
-CART first = primary set (best checkpoint by its test PSNR). Sampling weights: CART 4, FLAME 2, KAIST 1,
-M3FD 0.5, LLVIP 0.5 (each set gets that share of every epoch, whatever its size).
+CART first = primary set (best checkpoint by its test PSNR). Sampling weights: CART 4, FLAME 2, M3FD 1, KAIST 0.5,
+LLVIP 0.5 (each set gets that share of every epoch, whatever its size).
 """)
 code("""
-WEIGHTS = {"cart": 4, "flame": 2, "kaist": 1, "m3fd": 0.5, "llvip": 0.5}
+WEIGHTS = {"cart": 4, "flame": 2, "m3fd": 1, "kaist": 0.5, "llvip": 0.5}
 order = ["cart"] + sorted(k for k in sets if k != "cart")
 cmd = [sys.executable, "-m", "infravision.train.thermovision", "--data",
        *[f"{k}={sets[k]}:{WEIGHTS.get(k, 1)}" for k in order],

@@ -52,6 +52,8 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
 - **Large close people (found 2026-11-01):** a low oblique frame with 4 clear people → the POP model found 0 at any imgsz; stock COCO yolo11s found 4/4 (0.87–0.91). The fine-tune forgot large people. Fix now: `detection.near_weights` (COCO model, boxes ≥ 8% of frame height only; no change on POP / HIT-UAV / RGBT in an A/B on 100–150 frames each). Fix in training: LLVIP persons in v3. `checkpoints/yolo/coco_yolo11s.pt` is in the external-drive weights zip (added 2026-11-01).
 - **Colorizer (2026-11-01):** retraining on LLVIP won't help (night street scenes). RGBTDronePerson colour/thermal pairs are **not aligned** (different fields of view; checked with edge overlays), so they can't train it either. Use the `palette` / `luma` views; a better colorizer needs registered daytime aerial pairs.
 
+- **Colorizer v2 (2026-11-01, top priority):** goal = a *normal colour photo* of the scene from the thermal frame (not a heat palette). Aligned daytime pairs: **CART** (2282, drone, rivers/lakes/coast/desert/forest; downloaded inside the Kaggle notebook), **FLAME 2** clear pre-burn frames (1805 of 53k; smoky fire frames dropped: thermal sees through smoke, colour does not), **M3FD** daytime (3828 of 4200, ground-level streets incl. wet roads, people). `datasets/colorizer_extra.zip` (329 MB) = M3FD + FLAME packs. Notebook `colab_training/train_colorizer_v2_kaggle.ipynb` (PatchGAN, 320 px). Rejected: VTUAV (thermal view ≠ colour view), KAIST preview (night), RGBTDronePerson (not aligned). FLAME 2 zip is ZIP64: open it with Python zipfile or 7z, not `unzip`.
+
 ## User tasks
 
 **Every training run now stops itself early if it is broken** (NaN loss, EDSR more than 3 dB below bicubic, colorizer output flat, YOLO mAP50 < 0.05 at epoch 5). A run that fails in the first minutes with `HEALTH CHECK FAILED` means: send Claude the log.
@@ -97,7 +99,8 @@ The targets are goals, not promises. Real numbers go into `docs/RESULTS.md` afte
   3. Save Version → Save & Run All (Commit). ~3–4 h (30 epochs max, early stop).
   4. Output tab → `sar_1024.zip` → put it in `datasets/outputs/`. Claude installs it as `checkpoints/yolo/sar_v2.pt` (the old `best.pt` stays) and compares.
   - The notebook prints before/after mAP50 on test_pop, test_flood, test_airesq, test_wisard and the empty-blob rate (gate < 2%).
-- [ ] **U10: train detector v3 on Kaggle** (after U9 finishes)
+- [x] **U10: train detector v3 on Kaggle** (after U9 finishes)
+  - Done 2026-11-01: `checkpoints/yolo/sar_v3.pt` (dashboard default). HIT-UAV 0.344 → 0.851, LLVIP 0.044 → 0.705, RGBT 0.102 → 0.327, AIResQ 0.396 → 0.457, WiSARD 0.630 → 0.637, **POP 0.614 → 0.525**. Details in `docs/RESULTS.md`.
   0. Ready 2026-11-01: `start.pt` = v2 at `human_detection/sar_v2_start/start.pt`; zip rebuilt with balanced val (every 4th POP val frame: 1372 val) and the notebook fine-tunes with SGD lr 0.002 cosine, patience 8.
   1. (done) Put U9's `sar_1024.zip` in `datasets/outputs/`. Claude runs `scripts/install_detector.py ../datasets/outputs/sar_1024.zip --name sar_v2 --sweep` → installs `checkpoints/yolo/sar_v2.pt` (old `best.pt` kept), prints before/after, writes `human_detection/sar_v2_start/start.pt`.
   2. **Faster upload (use this):** Kaggle → two private datasets: `human_detection/sar_v3_addon.zip` (0.69 GB: only the data the v2 upload lacks) and `human_detection/sar_v2_start/start.pt` (19 MB).

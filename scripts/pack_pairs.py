@@ -31,6 +31,10 @@ def main():
     p.add_argument("--step", type=int, default=1)
     p.add_argument("--test_every", type=int, default=6)
     p.add_argument("--test_prefixes", nargs="*", default=[])
+    p.add_argument("--test_block", type=int, default=1,
+                   help="hold out test pairs in blocks of this many consecutive kept pairs (video frames)")
+    p.add_argument("--min_brightness", type=float, default=0,
+                   help="skip pairs whose colour image is darker than this mean (0-255): night frames")
     a = p.parse_args()
     ir = {f.stem: f for f in Path(a.ir).iterdir() if f.suffix.lower() in EXTS}
     rgb = {f.stem: f for f in Path(a.rgb).iterdir() if f.suffix.lower() in EXTS}
@@ -47,10 +51,14 @@ def main():
             if a.test_prefixes:
                 split = "test" if any(s.startswith(t) for t in a.test_prefixes) else "train"
             else:
-                split = "test" if k % a.test_every == a.test_every - 1 else "train"
+                b = k // max(1, a.test_block)
+                split = "test" if b % a.test_every == a.test_every - 1 else "train"
             t = cv2.imread(str(ir[s]), cv2.IMREAD_GRAYSCALE)
             c = cv2.imread(str(rgb[s]), cv2.IMREAD_COLOR)
             if t is None or c is None:
+                continue
+            if a.min_brightness and cv2.resize(c, (64, 48)).mean() < a.min_brightness:
+                n["dark"] = n.get("dark", 0) + 1
                 continue
             size = (a.side, round(a.side * t.shape[0] / t.shape[1]))
             for kind, img in (("ir", t), ("rgb", c)):
@@ -58,7 +66,7 @@ def main():
                                        [cv2.IMWRITE_JPEG_QUALITY, 95])
                 z.writestr(f"{a.name}/{split}/{kind}/{s}.jpg", buf.tobytes())
             n[split] += 1
-    print(f"{a.name}: train {n['train']}, test {n['test']} pairs -> {a.out} "
+    print(f"{a.name}: train {n['train']}, test {n['test']} pairs, skipped dark {n.get('dark', 0)} -> {a.out} "
           f"({Path(a.out).stat().st_size / 1e6:.1f} MB)")
 
 
