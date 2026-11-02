@@ -55,10 +55,14 @@ def llvip_pairs(root, split):
 class LLVIPColor(Dataset):
     """-> (thermal 1xSxS, RGB 3xSxS), both in [0, 1]; whole frame (train: random 80-100% crop + flip)."""
 
-    def __init__(self, pairs, size=256, train=True):
+    def __init__(self, pairs, size=256, train=True, geo_aug=0.0, thermal_aug=False):
         if not pairs:
             raise ValueError("LLVIPColor: no pairs found")
         self.pairs, self.size, self.train = pairs, size, train
+        # geo_aug: probability of a random 90-degree rotation / vertical flip of the pair. CART is
+        # mostly oblique (sky on top), so without it the model paints "blue = top" on nadir frames.
+        # thermal_aug: random gamma / contrast / noise / blur on the thermal input only (other cameras).
+        self.geo_aug, self.thermal_aug = float(geo_aug), bool(thermal_aug)
 
     def __len__(self):
         return len(self.pairs)
@@ -82,8 +86,22 @@ class LLVIPColor(Dataset):
         sz = (self.size, self.size)
         t = cv2.resize(np.ascontiguousarray(t), sz, interpolation=cv2.INTER_AREA)
         v = cv2.resize(np.ascontiguousarray(v), sz, interpolation=cv2.INTER_AREA)
-        return (torch.from_numpy(t).float().div_(255)[None],
-                torch.from_numpy(v).float().div_(255).permute(2, 0, 1))
+        if self.train and self.geo_aug and random.random() < self.geo_aug:
+            k = random.randint(0, 3)
+            t, v = np.rot90(t, k), np.rot90(v, k)
+            if random.random() < 0.5:
+                t, v = t[::-1], v[::-1]
+            t, v = np.ascontiguousarray(t), np.ascontiguousarray(v)
+        tt = torch.from_numpy(t).float().div_(255)[None]
+        if self.train and self.thermal_aug:
+            lo, hi = np.percentile(t, (random.uniform(0, 3), random.uniform(97, 100)))
+            tt = ((tt - lo / 255) / max((hi - lo) / 255, 1e-3)).clamp_(0, 1)          # camera AGC stretch
+            tt = tt.pow(random.uniform(0.7, 1.4))                                      # gamma
+            if random.random() < 0.3:
+                k = random.choice((3, 5))
+                tt = F.avg_pool2d(tt[None], k, 1, k // 2)[0]                           # mild blur
+            tt = (tt + torch.randn_like(tt) * random.uniform(0, 0.03)).clamp_(0, 1)    # sensor noise
+        return tt, torch.from_numpy(v).float().div_(255).permute(2, 0, 1)
 
 
 def parse_sources(specs):
@@ -161,6 +179,10 @@ def main(argv=None):
                         "primary set (best checkpoint by its val PSNR). Default: configs datasets.llvip")
     p.add_argument("--gan_weight", type=float, default=0.0, help="conditional PatchGAN loss weight (0 = off)")
     p.add_argument("--gan_start", type=int, default=2, help="first epoch with the GAN loss")
+    p.add_argument("--geo_aug", type=float, default=0.0,
+                   help="probability of a random 90-degree rotation / flip of a training pair (nadir views)")
+    p.add_argument("--thermal_aug", action="store_true",
+                   help="random contrast / gamma / blur / noise on the thermal input (other cameras)")
     p.add_argument("--init", default="", help="start G from these weights (e.g. colorizer v2 for a fine-tune); "
                                              "not a resume: optimiser and epochs start fresh")
     p.add_argument("--epochs", type=int, default=30)
@@ -210,7 +232,8 @@ def main(argv=None):
     n_draw = args.steps_per_epoch * args.batch if args.steps_per_epoch else len(train_pairs)
     sampler = WeightedRandomSampler(torch.tensor(weights, dtype=torch.double), n_draw, replacement=True,
                                     generator=torch.Generator().manual_seed(args.seed))
-    tl = DataLoader(LLVIPColor(train_pairs, args.size, True), args.batch, sampler=sampler,
+    tl = DataLoader(LLVIPColor(train_pairs, args.size, True, args.geo_aug, args.thermal_aug), args.batch,
+                    sampler=sampler,
                     num_workers=args.workers, drop_last=True, persistent_workers=args.workers > 0)
 
     G = build_model(not args.no_pretrained and not args.init).to(device)
@@ -234,7 +257,7 @@ def main(argv=None):
 
     meta = dict(model="ThermoVisionUNet", architecture="pretrained_unet", encoder="resnet34", input_size=args.size,
                 trained_on="+".join(n for n, _, _ in sources), perceptual=perc is not None,
-                gan_weight=args.gan_weight)
+                gan_weight=args.gan_weight, geo_aug=args.geo_aug, thermal_aug=args.thermal_aug)
     keeper = BestKeeper(out, "thermovision", "val_psnr", meta)
     resumer = Resumer(out, keeper, args.resume, G=G, opt=opt, sched=sched, scaler=scaler, D=D, optD=optD)
 
