@@ -73,10 +73,11 @@ COLORIZERS = {"ThermoVision U-Net (default)": "thermovision",
 SR_MODELS = {"Bicubic x2 (no model, fast)": "bicubic", "EDSR x2 (trained on POP, ~1 min/frame on CPU)": "edsr",
              "Off (1x, quickest on CPU)": "off"}
 PALETTES = ["White-hot (people bright)", "Black-hot (people dark)"]
-# Stage 3. The LLVIP colorizer alone gives a dark night-photo look, so by default its colour is
+# Stage 3. Default: the colorizer's colour laid over the sharp thermal detail (warm people stay bright);
+# "natural brightness" = the colorizer's own photo-like output (softer). v1 (LLVIP) was night-dark.
 # laid over the thermal detail (color_post.view: luma).
 VIEWS = {"AI colour on thermal detail": "luma", "Thermal palette (inferno)": "palette",
-         "Raw AI colorizer output": "ai"}
+         "AI colour photo (natural brightness, softer)": "ai"}
 # Local contrast (CLAHE) on the super-resolved frame; strong settings also amplify foliage texture.
 CONTRAST = {"Off": 0.0, "Mild": 1.0, "Medium": 1.5, "Strong": 2.5}
 VIDEO_MODES = ["Detection only (fast, boxes on the thermal frame)", "Full pipeline (all stages, ~2 s per frame)"]
@@ -156,7 +157,8 @@ def quality_lines(p, cache=_METRICS):
         cache[col_path] = checkpoint_metrics(col_path)
     m = cache[col_path]
     if m and "val_psnr" in m:
-        lines.append(f"Colorizer on LLVIP val: **{m['val_psnr']:.2f} dB** PSNR, SSIM {m.get('val_ssim', 0):.3f}, "
+        on = m.get("primary") or "LLVIP"
+        lines.append(f"Colorizer on {on.upper() if len(on) <= 5 else on} val: **{m['val_psnr']:.2f} dB** PSNR, SSIM {m.get('val_ssim', 0):.3f}, "
                      f"saturation {m.get('val_saturation', 0):.3f}")
     else:
         lines.append(f"Colorizer: {col.name}")
@@ -432,7 +434,8 @@ def build(pipes, default_colorizer="thermovision"):
                                                   x_title="video time (s)", y_title="people", height=360)
                     video_files = gr.File(label="Downloads: annotated video (WebM) · per-frame CSV",
                                           file_count="multiple")
-        gr.Markdown("Colours are estimated by a model trained on LLVIP street scenes; they are not temperatures. "
+        gr.Markdown("Colours are estimated by a model trained on daytime aerial colour/thermal pairs (CART, FLAME 2) and "
+                    "street scenes (M3FD): plausible colours, not measured ones, and not temperatures. "
                     "'AI colour on thermal detail' keeps the brightness of the thermal frame and takes only the "
                     "tint from the colorizer. Hotspots mark the warmest pixels of each frame (not only people).")
         controls = [colorizer, sr, conf, tiles, hotspot, palette, view, contrast]

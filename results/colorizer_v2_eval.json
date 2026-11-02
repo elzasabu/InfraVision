@@ -1,0 +1,28 @@
+{
+  "v1 (LLVIP night)": {
+    "psnr": 10.1495,
+    "ssim": 0.4522,
+    "sat": 0.3159,
+    "bright": 23.6937
+  },
+  "v2 (CART+FLAME+M3FD)": {
+    "psnr": 17.7451,
+    "ssim": 0.7048,
+    "sat": 0.2193,
+    "bright": 84.6977
+  },
+  "real colour photos": {
+    "sat": 0.2319,
+    "bright": 85.9739
+  },
+  "frames": 62,
+  "test_flights": [
+    "2022-05-15_ColoradoRiver_flight3",
+    "2022-12-20_Castaic_Lake_flight1",
+    "arroyo_seco_upstream-2",
+    "arroyo_seco_upstream-3",
+    "big_bear_ONR_2022-05-08-11-50-48",
+    "caltech-coregistered-nature-dataset_ONR_2022-04-03-17-16-17",
+    "caltech_duck_ONR_2023-03-22-14-31-06"
+  ]
+}

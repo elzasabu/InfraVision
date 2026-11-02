@@ -109,6 +109,31 @@ undegraded (clean downscale only). Visually (`results/edsr_v3_zoom.jpg`, people
 crops from POP test) EDSR is slightly crisper than bicubic with no artefacts.
 CPU cost: 15.5 s for a 640x512 → 1280x1024 frame, ~61 s for a full POP frame → 2560x2048.
 
+## Colorizer v2: daytime aerial colour (Kaggle, 2026-11-02)
+
+`checkpoints/colorizer/thermovision_v2.pth` (dashboard default; v1 kept). ThermoVision U-Net, ImageNet
+ResNet34 encoder, 320 px, L1 + edge + VGG + chroma + conditional PatchGAN (from epoch 3), 40 x 400 steps,
+best epoch 31 (flat from ~25: converged on this data). Aligned daytime pairs: **CART** (Caltech Aerial
+RGB-Thermal: 2282 drone pairs over rivers, lakes, coast, desert, forest), **FLAME 2** clear pre-burn frames
+(1805), **M3FD** daytime street scenes (3828). Sampling CART 4 : FLAME 2 : M3FD 1.
+
+Held-out CART flights (62 frames, 7 flights never trained on; `scripts/eval_colorizer.py`,
+`results/colorizer_v2_eval.{json,jpg}`), scored against the real colour photo:
+
+| model | PSNR | SSIM | saturation | brightness |
+|---|---|---|---|---|
+| v1 (LLVIP night streets) | 10.15 dB | 0.452 | 0.316 | 23.7 |
+| **v2** | **17.75 dB** | **0.705** | 0.219 | 84.7 |
+| real colour photo | | | 0.232 | 86.0 |
+
+- v2 reproduces daylight brightness and colour amount (blue water, green/brown vegetation, tan ground, sky);
+  textures are soft (U-Net at 320 px); object colours are plausible, not measured (thermal has no colour).
+- On other thermal cameras (POP, WiSARD, HIT-UAV, LLVIP; `results/colorizer_v2_sar_frames.jpg`) colours are
+  right in kind but blotchier (camera / contrast domain gap). The dashboard default view (`luma`: thermal
+  detail + v2 colour) is sharp; the "natural brightness" view is the model's own photo-like output
+  (`results/colorizer_v2_views.jpg`).
+- POP test (20 frames): raw brightness 27 -> 82; saturation after colour post 0.21 (Phase 3 gate > 0.18).
+
 ## Colorizer: thermal to RGB (synthetic set)
 
 **Synthetic set**: `data/paired_disaster`, 80 val pairs (LLVIP thermal + real
