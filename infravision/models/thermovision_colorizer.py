@@ -27,6 +27,8 @@ import torch.nn.functional as F
 import torchvision
 
 IMAGENET_MEAN, IMAGENET_STD = 0.449, 0.226   # one grey channel: mean of the ImageNet channel means / stds
+RGB_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)   # in_ch=3 (reverse model): ImageNet per channel
+RGB_STD = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
 ARCHITECTURE = "pretrained_unet"
 MULTIPLE = 32                                 # ResNet34 total stride
 
@@ -38,10 +40,10 @@ def conv_bn_relu(i, o):
 class ResNet34Encoder(nn.Module):
     channels = (64, 64, 128, 256, 512)  # strides 2, 4, 8, 16, 32
 
-    def __init__(self):
+    def __init__(self, in_ch=1):
         super().__init__()
         r = torchvision.models.resnet34(weights=None)  # architecture only; no download
-        r.conv1 = nn.Conv2d(1, 64, 7, 2, 3, bias=False)
+        r.conv1 = nn.Conv2d(in_ch, 64, 7, 2, 3, bias=False)
         self.conv1, self.bn1, self.relu, self.maxpool = r.conv1, r.bn1, r.relu, r.maxpool
         self.layer1, self.layer2, self.layer3, self.layer4 = r.layer1, r.layer2, r.layer3, r.layer4
 
@@ -55,29 +57,37 @@ class ResNet34Encoder(nn.Module):
 
 
 class ThermoVisionUNet(nn.Module):
-    """ThermoVision `PretrainedUNet` with the ResNet34 encoder (same state_dict keys)."""
+    """ThermoVision `PretrainedUNet` with the ResNet34 encoder (same state_dict keys).
 
-    def __init__(self, encoder="resnet34", decoder_channels=(256, 128, 64, 32, 16)):
+    Default 1 -> 3 channels (thermal -> RGB, the colorizer). in_ch=3, out_ch=1 is the reverse
+    model (RGB -> thermal) used to make pseudo-paired training data from colour-only drone photos.
+    """
+
+    def __init__(self, encoder="resnet34", decoder_channels=(256, 128, 64, 32, 16), in_ch=1, out_ch=3):
         super().__init__()
         if encoder != "resnet34":
             raise ValueError(f"only the resnet34 encoder is vendored, checkpoint asks for {encoder!r}")
-        self.encoder = ResNet34Encoder()
+        self.in_ch, self.out_ch = int(in_ch), int(out_ch)
+        self.encoder = ResNet34Encoder(self.in_ch)
         ec = self.encoder.channels
         d4, d3, d2, d1, d0 = decoder_channels
         self.dec4 = nn.Sequential(*conv_bn_relu(ec[4] + ec[3], d4), *conv_bn_relu(d4, d4))
         self.dec3 = nn.Sequential(*conv_bn_relu(d4 + ec[2], d3), *conv_bn_relu(d3, d3))
         self.dec2 = nn.Sequential(*conv_bn_relu(d3 + ec[1], d2), *conv_bn_relu(d2, d2))
         self.dec1 = nn.Sequential(*conv_bn_relu(d2 + ec[0], d1), *conv_bn_relu(d1, d1))
-        self.stem = nn.Sequential(*conv_bn_relu(1, 16), *conv_bn_relu(16, 16))      # full-resolution thermal branch
+        self.stem = nn.Sequential(*conv_bn_relu(self.in_ch, 16), *conv_bn_relu(16, 16))   # full-resolution branch
         self.dec0 = nn.Sequential(*conv_bn_relu(d1 + 16, d0), *conv_bn_relu(d0, d0))
-        self.head = nn.Conv2d(d0, 3, 3, padding=1)
+        self.head = nn.Conv2d(d0, self.out_ch, 3, padding=1)
 
     @staticmethod
     def _up(x, ref):
         return F.interpolate(x, size=ref.shape[-2:], mode="bilinear", align_corners=False)
 
     def forward(self, x):
-        z = (x - IMAGENET_MEAN) / IMAGENET_STD
+        if self.in_ch == 3:
+            z = (x - RGB_MEAN.to(x)) / RGB_STD.to(x)
+        else:
+            z = (x - IMAGENET_MEAN) / IMAGENET_STD
         f0, f1, f2, f3, f4 = self.encoder(z)
         d = self.dec4(torch.cat([self._up(f4, f3), f3], 1))
         d = self.dec3(torch.cat([self._up(d, f2), f2], 1))

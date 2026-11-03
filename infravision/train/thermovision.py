@@ -133,15 +133,16 @@ class PatchD(torch.nn.Module):
         return self.net(torch.cat([t * 2 - 1, rgb * 2 - 1], 1))
 
 
-def build_model(pretrained=True):
-    m = ThermoVisionUNet()
+def build_model(pretrained=True, reverse=False):
+    m = ThermoVisionUNet(in_ch=3, out_ch=1) if reverse else ThermoVisionUNet()
     if pretrained:
         try:
             from torchvision.models import ResNet34_Weights, resnet34
 
             sd = {k: v for k, v in resnet34(weights=ResNet34_Weights.IMAGENET1K_V1).state_dict().items()
                   if not k.startswith("fc.")}
-            sd["conv1.weight"] = sd["conv1.weight"].sum(1, keepdim=True)   # RGB filters -> one grey channel
+            if not reverse:
+                sd["conv1.weight"] = sd["conv1.weight"].sum(1, keepdim=True)   # RGB filters -> one grey channel
             m.encoder.load_state_dict(sd)
             print("encoder: ImageNet ResNet34")
         except Exception as e:  # no internet
@@ -150,7 +151,13 @@ def build_model(pretrained=True):
 
 
 def luma(x):
+    if x.shape[1] == 1:
+        return x
     return 0.299 * x[:, :1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:]
+
+
+def rgb3(x):
+    return x.repeat(1, 3, 1, 1) if x.shape[1] == 1 else x
 
 
 def chroma(x):
@@ -167,7 +174,9 @@ def edges(x):
 
 
 def saturation(x):
-    """Mean HSV saturation of RGB in [0, 1]."""
+    """Mean HSV saturation of RGB in [0, 1] (0 for a 1-channel image)."""
+    if x.shape[1] == 1:
+        return x.new_zeros(())
     mx, mn = x.amax(1), x.amin(1)
     return ((mx - mn) / (mx + 1e-6)).mean()
 
@@ -183,6 +192,8 @@ def main(argv=None):
                    help="probability of a random 90-degree rotation / flip of a training pair (nadir views)")
     p.add_argument("--thermal_aug", action="store_true",
                    help="random contrast / gamma / blur / noise on the thermal input (other cameras)")
+    p.add_argument("--reverse", action="store_true",
+                   help="train the reverse model RGB -> thermal (rgb2thermal_best.pth), for pseudo-paired data")
     p.add_argument("--init", default="", help="start G from these weights (e.g. colorizer v2 for a fine-tune); "
                                              "not a resume: optimiser and epochs start fresh")
     p.add_argument("--epochs", type=int, default=30)
@@ -236,7 +247,9 @@ def main(argv=None):
                     sampler=sampler,
                     num_workers=args.workers, drop_last=True, persistent_workers=args.workers > 0)
 
-    G = build_model(not args.no_pretrained and not args.init).to(device)
+    if args.reverse and args.thermal_aug:
+        raise SystemExit("--thermal_aug changes the thermal image, which is the target in --reverse mode")
+    G = build_model(not args.no_pretrained and not args.init, args.reverse).to(device)
     if args.init:
         from ..colorizer import load_thermovision
         G.load_state_dict(load_thermovision(args.init, "cpu", verbose=True)[0].state_dict())
@@ -258,7 +271,9 @@ def main(argv=None):
     meta = dict(model="ThermoVisionUNet", architecture="pretrained_unet", encoder="resnet34", input_size=args.size,
                 trained_on="+".join(n for n, _, _ in sources), perceptual=perc is not None,
                 gan_weight=args.gan_weight, geo_aug=args.geo_aug, thermal_aug=args.thermal_aug)
-    keeper = BestKeeper(out, "thermovision", "val_psnr", meta)
+    if args.reverse:
+        meta.update(model="ThermoVisionUNet-rgb2thermal", in_ch=3, out_ch=1, direction="rgb2thermal")
+    keeper = BestKeeper(out, "rgb2thermal" if args.reverse else "thermovision", "val_psnr", meta)
     resumer = Resumer(out, keeper, args.resume, G=G, opt=opt, sched=sched, scaler=scaler, D=D, optD=optD)
 
     watch = LossWatch()
@@ -267,24 +282,28 @@ def main(argv=None):
         tot = n = 0
         for step, (t, v) in enumerate(tl, 1):
             t, v = t.to(device, non_blocking=True), v.to(device, non_blocking=True)
+            x, y = (v, t) if args.reverse else (t, v)           # reverse: RGB in, thermal out
             with autocast(device, amp):
-                fake = G(t)
+                fake = G(x)
             fake = fake.float()
-            loss = (F.l1_loss(fake, v) + args.edge_weight * F.l1_loss(edges(fake), edges(v))
-                    + args.chroma_weight * F.l1_loss(chroma(fake), chroma(v)))
+            loss = F.l1_loss(fake, y) + args.edge_weight * F.l1_loss(edges(fake), edges(y))
+            if not args.reverse:
+                loss = loss + args.chroma_weight * F.l1_loss(chroma(fake), chroma(y))
             if perc is not None:
                 with autocast(device, amp):
-                    loss = loss + args.perceptual_weight * perc(fake * 2 - 1, v * 2 - 1)
+                    loss = loss + args.perceptual_weight * perc(rgb3(fake) * 2 - 1, rgb3(y) * 2 - 1)
+            # D always judges a (thermal, RGB) pair; the generated half is the model's output
+            pair = (lambda gen: D(gen, v)) if args.reverse else (lambda gen: D(t, gen))
             gan_on = D is not None and epoch >= args.gan_start
             if gan_on:   # fp32 discriminator: small, and LSGAN in fp16 is touchy
-                g_adv = D(t, fake)
+                g_adv = pair(fake)
                 loss = loss + args.gan_weight * F.mse_loss(g_adv, torch.ones_like(g_adv))
             opt.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
             scaler.step(opt)
             scaler.update()
             if gan_on:
-                d_real, d_fake = D(t, v), D(t, fake.detach())
+                d_real, d_fake = D(t, v), pair(fake.detach())
                 d_loss = 0.5 * (F.mse_loss(d_real, torch.ones_like(d_real)) + F.mse_loss(d_fake, torch.zeros_like(d_fake)))
                 optD.zero_grad(set_to_none=True)
                 d_loss.backward()
@@ -303,17 +322,18 @@ def main(argv=None):
             for name, vl in vls.items():
                 ps, ss, sat, sat_t, con, con_t = [], [], [], [], [], []
                 for i, (t, v) in enumerate(vl):
+                    x, y = (v, t) if args.reverse else (t, v)
                     with autocast(device, amp):
-                        pred = G(t.to(device))
+                        pred = G(x.to(device))
                     pred = pred.float().cpu().clamp(0, 1)
-                    ps.append(psnr(pred, v))
-                    ss.append(ssim(pred, v))
+                    ps.append(psnr(pred, y))
+                    ss.append(ssim(pred, y))
                     sat.append(saturation(pred))
-                    sat_t.append(saturation(v))
+                    sat_t.append(saturation(y))
                     con.append(luma(pred).flatten(1).std(1))
-                    con_t.append(luma(v).flatten(1).std(1))
+                    con_t.append(luma(y).flatten(1).std(1))
                     if i == 0:
-                        save_image(torch.cat([t.repeat(1, 3, 1, 1), pred, v]),
+                        save_image(torch.cat([rgb3(x), rgb3(pred), rgb3(y)]),
                                    out / f"val_samples_epoch{epoch:03d}_{name}.png", nrow=t.shape[0])
                 per[name] = dict(psnr=torch.stack(ps).mean().item(), ssim=torch.stack(ss).mean().item(),
                                  saturation=torch.stack(sat).mean().item(),
