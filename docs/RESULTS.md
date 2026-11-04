@@ -109,6 +109,38 @@ undegraded (clean downscale only). Visually (`results/edsr_v3_zoom.jpg`, people
 crops from POP test) EDSR is slightly crisper than bicubic with no artefacts.
 CPU cost: 15.5 s for a 640x512 → 1280x1024 frame, ~61 s for a full POP frame → 2560x2048.
 
+## Colorizer v3: less position bias, flood pseudo pairs (Kaggle, 2026-11-04)
+
+`checkpoints/colorizer/thermovision_v3.pth` (dashboard default; v1, v2 kept). Real pairs CART + FLAME 2 + M3FD, plus
+pseudo pairs: FloodNet and RescueNet colour photos with thermal from a reverse model (`rgb2thermal_v1.pth`).
+Random rotation / flip, thermal contrast / gamma / noise, PatchGAN 0.02; best epoch 38 of 40.
+`scripts/compare_colorizers.py` -> `results/colorizer_v3_compare.json`; images `results/colorizer_v3_views.jpg`.
+
+Held-out CART flights (42 frames, real colour photo as ground truth), PSNR / SSIM:
+
+| orientation | v2 | v3 |
+|---|---|---|
+| upright | **18.13 / 0.668** | 17.06 / 0.660 |
+| upside down | 13.26 / 0.569 | **15.77 / 0.635** |
+| rotated 90 | 13.74 / 0.585 | **15.54 / 0.631** |
+
+Real thermal, other cameras (30 frames each, no ground truth). Rotation disagreement = LAB a/b difference between
+f(x) and rot180(f(rot180(x))); vertical band = systematic top-minus-bottom colour. Lower is better for both:
+
+| set | rotation disagreement v2 -> v3 | vertical band v2 -> v3 |
+|---|---|---|
+| POP test | 3.37 -> **1.95** | **0.54** -> 2.44 (worse) |
+| WiSARD | 5.11 -> **2.72** | 8.03 -> **1.36** |
+| HIT-UAV | 2.94 -> **1.50** | 3.23 -> **0.16** |
+| AIResQ | 4.19 -> **1.93** | 5.69 -> **0.15** |
+
+- These measure position bias, not colour accuracy: no colour ground truth exists for these cameras.
+- By eye (5 frames): better on a forest road (green, not blue) and a lake (water follows the shoreline); a POP forest
+  loses its blue but is tan, not green; a cold hillside meadow is painted blue (worse than v2's tan).
+- The reverse model's thermal is blurry and low-contrast, unlike real thermal, so flood colours may transfer only
+  partly. FloodNet / RescueNet scores (16.1 / 14.0 dB) are on generated thermal, not real thermal, so they do not
+  show flood accuracy on real footage. No real thermal flood frames with colour ground truth exist here.
+
 ## Colorizer v2: daytime aerial colour (Kaggle, 2026-11-02)
 
 `checkpoints/colorizer/thermovision_v2.pth` (dashboard default; v1 kept). ThermoVision U-Net, ImageNet

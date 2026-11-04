@@ -1,0 +1,87 @@
+{
+  "cart_ground_truth": {
+    "v2": {
+      "upright": {
+        "psnr": 18.13,
+        "ssim": 0.668
+      },
+      "upside down": {
+        "psnr": 13.26,
+        "ssim": 0.569
+      },
+      "rotated 90": {
+        "psnr": 13.74,
+        "ssim": 0.585
+      }
+    },
+    "v3": {
+      "upright": {
+        "psnr": 17.06,
+        "ssim": 0.66
+      },
+      "upside down": {
+        "psnr": 15.77,
+        "ssim": 0.635
+      },
+      "rotated 90": {
+        "psnr": 15.54,
+        "ssim": 0.631
+      }
+    }
+  },
+  "cart_frames": 42,
+  "real_thermal": {
+    "POP test": {
+      "frames": 30,
+      "v2": {
+        "rotation_disagreement": 3.37,
+        "vertical_band": 0.54,
+        "saturation": 0.112
+      },
+      "v3": {
+        "rotation_disagreement": 1.95,
+        "vertical_band": 2.44,
+        "saturation": 0.154
+      }
+    },
+    "WiSARD": {
+      "frames": 30,
+      "v2": {
+        "rotation_disagreement": 5.11,
+        "vertical_band": 8.03,
+        "saturation": 0.16
+      },
+      "v3": {
+        "rotation_disagreement": 2.72,
+        "vertical_band": 1.36,
+        "saturation": 0.127
+      }
+    },
+    "HIT-UAV": {
+      "frames": 30,
+      "v2": {
+        "rotation_disagreement": 2.94,
+        "vertical_band": 3.23,
+        "saturation": 0.084
+      },
+      "v3": {
+        "rotation_disagreement": 1.5,
+        "vertical_band": 0.16,
+        "saturation": 0.069
+      }
+    },
+    "AIResQ": {
+      "frames": 30,
+      "v2": {
+        "rotation_disagreement": 4.19,
+        "vertical_band": 5.69,
+        "saturation": 0.143
+      },
+      "v3": {
+        "rotation_disagreement": 1.93,
+        "vertical_band": 0.15,
+        "saturation": 0.133
+      }
+    }
+  }
+}
