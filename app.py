@@ -10,7 +10,8 @@ tactical overlay), live controls (detection confidence, tiling, hotspot blend, S
 model, colorizer), victim count, per-branch latency, model quality and downloads
 (overlay PNG, all stages + JSON report as a zip). Batch tab: many frames at once,
 a gallery, a per-frame CSV and one zip with every overlay. Video tab: a thermal clip is
-sampled every N seconds; annotated WebM video, people-over-time chart, CSV.
+sampled every N seconds; annotated WebM video, people-over-time chart, CSV. Compare tab:
+one frame through two colorizers side by side, with a labelled PNG for slides.
 """
 import argparse
 import csv
@@ -67,8 +68,18 @@ def paired_examples():
     return names, by_thermal
 
 
-COLORIZERS = {"ThermoVision U-Net (default)": "thermovision",
+COLORIZERS = {"ThermoVision v3 (default)": "thermovision",
+              "ThermoVision v2 (aerial pairs, can show colour bands)": "thermovision:v2",
+              "ThermoVision v1 (LLVIP night streets, dark)": "thermovision:v1",
               "InfraVision tiny (old, for comparison)": "infravision_tiny"}
+# Older ThermoVision checkpoints; "thermovision" itself is colorizer.checkpoint in the config.
+COLORIZER_FILES = {"thermovision:v2": "checkpoints/colorizer/thermovision_v2.pth",
+                   "thermovision:v1": "checkpoints/colorizer/thermovision_llvip_v1.pth"}
+
+
+def available_colorizers():
+    """COLORIZERS without the versions whose weights are not on this machine."""
+    return {k: v for k, v in COLORIZERS.items() if v not in COLORIZER_FILES or (ROOT / COLORIZER_FILES[v]).is_file()}
 # Bicubic first (the default): EDSR works on the 2x frame, ~60 s per full POP frame on a laptop CPU.
 SR_MODELS = {"Bicubic x2 (no model, fast)": "bicubic", "EDSR x2 (trained on POP, ~1 min/frame on CPU)": "edsr",
              "Off (1x, quickest on CPU)": "off"}
@@ -98,7 +109,9 @@ class Pipelines:
     def get(self, colorizer, sr):
         key = (colorizer, sr)
         if key not in self.cache:
-            over = merge(self.over, {"colorizer": {"backend": colorizer}})
+            col = {"backend": "thermovision", "checkpoint": COLORIZER_FILES[colorizer]} \
+                if colorizer in COLORIZER_FILES else {"backend": colorizer}
+            over = merge(self.over, {"colorizer": col})
             if sr == "off":
                 over = merge(over, {"sr": {"scale": 1}})
             else:
@@ -206,7 +219,9 @@ def build(pipes, default_colorizer="thermovision"):
     pipe = pipes.get(default_colorizer, "bicubic")
     info = pipe.describe()
     det_cfg, post_cfg = pipe.cfg["detection"], pipe.cfg.get("color_post", {})
-    default_col = next((k for k, v in COLORIZERS.items() if v == default_colorizer), next(iter(COLORIZERS)))
+    col_choices = available_colorizers()
+    default_col = next((k for k, v in col_choices.items() if v == default_colorizer), next(iter(col_choices)))
+    v2_label = next((k for k, v in col_choices.items() if v == "thermovision:v2"), default_col)
     default_tiles = next((k for k, v in TILES.items() if v == int(det_cfg.get("tile", 0))), next(iter(TILES)))
     default_view = next((k for k, v in VIEWS.items() if v == post_cfg.get("view", "luma")), next(iter(VIEWS)))
     pre_cfg = pipe.cfg["pre_enhance"]
@@ -302,6 +317,29 @@ def build(pipes, default_colorizer="thermovision"):
                    f"Average {sum(r['total_ms'] for r in rows) / len(rows) / 1000:.1f} s per frame")
         return gallery, summary, [str(table), str(bundle)]
 
+    def process_compare(upload, pick, col_a, col_b, sr, conf, tiles, hotspot, palette, view, contrast):
+        """One frame through two colorizers with identical settings; stage 3 of each, plus a labelled PNG."""
+        path = upload or (choices.get(pick) if pick else None)
+        if not path:
+            raise gr.Error("Upload a thermal image or pick one from the list.")
+        results = []
+        for col in (col_a, col_b):
+            s = settings_of(col, sr, conf, tiles, hotspot, palette, view, contrast)
+            results.append(run_one(path, s)[1])
+        ra, rb = results
+        h, w = ra["colour_view"].shape[:2]
+        thermal = cv2.resize(np.repeat(ra["thermal"][..., None], 3, axis=2), (w, h), interpolation=cv2.INTER_CUBIC)
+        panels = []
+        for img, name in ((thermal, "Thermal input"), (ra["colour_view"], col_a), (rb["colour_view"], col_b)):
+            img = cv2.resize(img, (900, round(900 * h / w)), interpolation=cv2.INTER_AREA)
+            cv2.putText(img, name.split(" (")[0], (14, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 0, 0), 6, cv2.LINE_AA)
+            cv2.putText(img, name.split(" (")[0], (14, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (255, 255, 0), 2, cv2.LINE_AA)
+            panels.append(img)
+        png = Path(tempfile.mkdtemp(prefix="infravision_compare_")) / f"{Path(path).stem}_compare.png"
+        save_rgb(png, np.hstack(panels))
+        return (ra["thermal"], gr.update(value=ra["colour_view"], label=col_a),
+                gr.update(value=rb["colour_view"], label=col_b), str(png))
+
     def detect_only(gray, s):
         """Fast video mode: detector on the raw frame, boxes drawn on the thermal image."""
         p = pipes.get(s["colorizer"], s["sr"])
@@ -374,7 +412,7 @@ def build(pipes, default_colorizer="thermovision"):
             + ("".join(f"\n\n⚠️ {n}" for n in info["notes"]) if info["notes"] else ""))
         with gr.Row():
             with gr.Column(scale=1):
-                colorizer = gr.Dropdown(list(COLORIZERS), value=default_col, label="Colorizer")
+                colorizer = gr.Dropdown(list(col_choices), value=default_col, label="Colorizer")
                 sr = gr.Dropdown(list(SR_MODELS), value=next(iter(SR_MODELS)), label="Super-resolution model")
                 conf = gr.Slider(0.05, 0.9, value=float(det_cfg.get("conf", 0.25)), step=0.05,
                                  label="Detection confidence threshold")
@@ -411,6 +449,22 @@ def build(pipes, default_colorizer="thermovision"):
                         quality = gr.Markdown()
                     # Always shown: Gradio 6 does not bring back a panel created with visible=False.
                     p_rgb = gr.Image(label="real RGB (only for synthetic samples)", interactive=False, height=240)
+                with gr.Tab("Compare colorizers"):
+                    gr.Markdown("One frame through two colorizers with the same settings (left panel: colour view, "
+                                "contrast, palette...). To use the winner everywhere, pick it in **Colorizer** on the left.")
+                    with gr.Row():
+                        cmp_up = gr.Image(type="filepath", label="Upload a thermal image", sources=["upload"], height=200)
+                        with gr.Column():
+                            cmp_pick = gr.Dropdown(list(choices), label="...or pick a POP test image / synthetic sample",
+                                                   value=None)
+                            cmp_a = gr.Dropdown(list(col_choices), value=v2_label, label="Colorizer A")
+                            cmp_b = gr.Dropdown(list(col_choices), value=default_col, label="Colorizer B")
+                            cmp_btn = gr.Button("Compare", variant="primary")
+                    with gr.Row():
+                        cmp_t = gr.Image(label="Thermal input", interactive=False)
+                        cmp_ia = gr.Image(label="Colorizer A", interactive=False)
+                        cmp_ib = gr.Image(label="Colorizer B", interactive=False)
+                    cmp_file = gr.File(label="Download: labelled side-by-side PNG (for slides)")
                 with gr.Tab("Batch"):
                     batch_in = gr.File(label="Thermal frames", file_count="multiple", file_types=["image"])
                     batch_btn = gr.Button("Run on all frames", variant="primary")
@@ -442,6 +496,8 @@ def build(pipes, default_colorizer="thermovision"):
         run_btn.click(process, [upload, pick, which] + controls,
                       [s1, s2, s3, s4, count, latency, quality, files, p_rgb])
         batch_btn.click(process_batch, [batch_in] + controls, [batch_gal, batch_sum, batch_files])
+        cmp_btn.click(process_compare, [cmp_up, cmp_pick, cmp_a, cmp_b, sr, conf, tiles, hotspot, palette, view, contrast],
+                      [cmp_t, cmp_ia, cmp_ib, cmp_file])
         video_btn.click(process_video, [video_in, every, max_frames, vmode] + controls,
                         [video_out, people_plot, video_sum, video_files])
     return demo
